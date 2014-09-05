@@ -1,4 +1,4 @@
-library clean_sync.locker;
+library clean_lock.locker;
 
 import 'dart:io';
 import 'dart:async';

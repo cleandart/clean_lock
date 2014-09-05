@@ -1,3 +1,5 @@
+library clean_lock.lock_requestor;
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';

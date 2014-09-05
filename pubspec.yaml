@@ -1,4 +1,4 @@
-name: lock
+name: clean_lock
 version: 0.0.1
 description: Locking server
 dependencies:

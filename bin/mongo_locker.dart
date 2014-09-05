@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:lock/locker.dart';
+import 'package:clean_lock/locker.dart';
 
 main(List<String> args) {
   if (args.length != 2) {
