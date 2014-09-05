@@ -37,12 +37,16 @@ class Locker {
     (req["action"] == "get" ? _addRequestor : _releaseLock)(req["id"], socket);
 
   _addRequestor(String id, Socket socket) {
+    // TODO what's the purpose of this?
     if (requestors == null) requestors = [];
+    // TODO what's the purpose of 'id'? If this was supposed to be type of lock
+    // (i. e. DBlock, deploy_lock, etc, it is not implemented correctly)
     requestors.add({"id": id, "socket": socket});
     checkLockRequestors();
   }
 
   _releaseLock(String id, Socket socket) {
+    // TODO shouldn't you check, if the socket removing the lock is really the owner?
     currentLock.remove("lock");
     writeJSON(socket, {"result":"ok", "action":"release", "id": id});
     checkLockRequestors();
