@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:clean_lock/locker.dart';
 
 main(List<String> args) {
-  print('tutu');
   if (args.length != 2) {
     print("You have to specify url and port");
     return new Future.value(null);
