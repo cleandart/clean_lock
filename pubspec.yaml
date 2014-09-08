@@ -2,9 +2,5 @@ name: clean_lock
 version: 0.0.1
 description: Locking server
 dependencies:
-  browser: any
   unittest: any
   useful: '>=1.0.17'
-dependency_overrides:
-  useful:
-    path: ../useful
