@@ -20,14 +20,13 @@ class Locker {
       ServerSocket.bind(url, port)
         .then((ServerSocket sSocket) {
           Locker locker = new Locker.config(sSocket);
-          locker.serverSocket.listen(locker.handleClient, onDone:() => print("socket done"));
+          locker.serverSocket.listen(locker.handleClient);
           locker._done = new Completer();
           return locker;
         });
 
   // Removes given socket from requestors and releases its locks
   _disposeOfSocket(Socket socket) {
-    print("disposing of socket");
     requestors.forEach((lock, reqList) {
       while (reqList.removeWhere((e) => e["socket"] == socket));
     });
@@ -46,7 +45,6 @@ class Locker {
 
   handleClient(Socket socket) {
     clientSockets.add(socket);
-//    socket.done.then((_) => _disposeOfSocket(socket));
     toJsonStream(socket).listen((Map data) {
       if (data["type"] == "lock") handleLockRequest(data["data"], socket);
     }, onDone: () => _disposeOfSocket(socket));
@@ -55,6 +53,7 @@ class Locker {
   handleLockRequest(Map req, Socket socket) =>
     (req["action"] == "get" ? _addRequestor : _releaseLock)(req["requestId"], req["lockType"], socket);
 
+  // Adds the socket with additional data to queue for given lockType
   _addRequestor(String requestId, String lockType, Socket socket) {
     if (requestors[lockType] == null) requestors[lockType] = [];
     requestors[lockType].add({"socket" : socket, "requestId": requestId});
@@ -62,24 +61,24 @@ class Locker {
   }
 
   _releaseLock(String requestId, String lockType, Socket socket) {
-    if (currentLock[lockType] == socket) {
+    if (currentLock[lockType]["socket"] == socket) {
       currentLock.remove(lockType);
-      writeJSON(socket, {"result":"ok", "action":"release"});
+      writeJSON(socket, {"result":"ok", "action":"release", "requestId":requestId});
       checkLockRequestors();
     } else {
       writeJSON(socket, {"error": "Cannot release lock when the socket does not own it", "action":"release"});
     }
   }
 
+  // Checks if someone can be given their requested lockType
   checkLockRequestors() {
-    print("Requestors: $requestors");
-    print("CurrentLock: $currentLock");
     requestors.forEach((lockType,socketList) {
       if (requestors[lockType].isNotEmpty && (!currentLock.containsKey(lockType))) {
         currentLock[lockType] = requestors[lockType].removeAt(0);
         writeJSON(currentLock[lockType]["socket"], {"result":"ok", "action":"get", "requestId": currentLock[lockType]["requestId"]});
       }
     });
+
   }
 
   Future close() =>
