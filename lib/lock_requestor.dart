@@ -16,7 +16,8 @@ class LockRequestor {
 
   LockRequestor(this._lockerSocket) {
     toJsonStream(_lockerSocket).listen((Map resp) {
-      Completer completer = requestors.remove(resp["id"]);
+      Completer completer = requestors.remove(resp["requestId"]);
+      print("completing");
       if (resp.containsKey("error")) {
         completer.completeError(resp["error"]);
       } else if (resp.containsKey("result")) {
@@ -29,22 +30,25 @@ class LockRequestor {
     Socket.connect(url, port).then((Socket socket) => new LockRequestor(socket))
       .catchError((e,s) => throw new Exception("LockRequestor was unable to connect to url: $url, port: $port, (is Locker running?)"));
 
-  Future getLock() {
-    Completer completer = _sendRequest("get");
+  // Obtains lock and returns unique ID for the holder
+  Future<String> getLock(String lockType) {
+    print("getlock");
+    Completer completer = _sendRequest(lockType, "get");
     return completer.future;
   }
 
-  Future releaseLock() {
-    Completer completer = _sendRequest("release");
+  Future releaseLock(String lockType) {
+    print("rellock");
+    Completer completer = _sendRequest(lockType, "release");
     return completer.future;
   }
 
-  _sendRequest(String action) {
-    var id = "$prefix--$_lockIdCounter";
+  _sendRequest(String lockType, String action) {
+    var requestId = "$prefix--$_lockIdCounter";
     _lockIdCounter++;
     Completer completer = new Completer();
-    requestors[id] = completer;
-    writeJSON(_lockerSocket, {"type": "lock", "data" : {"action" : action, "id": id}});
+    requestors[requestId] = completer;
+    writeJSON(_lockerSocket, {"type": "lock", "data" : {"lockType": lockType, "action" : action, "requestId" : requestId}});
     return completer;
   }
 

@@ -8,8 +8,8 @@ class Locker {
 
   ServerSocket serverSocket;
   List<Socket> clientSockets = [];
-  List<Map> requestors = [];
-  Map currentLock = {};
+  Map<String, List<Map> > requestors = {};
+  Map<String, Map> currentLock = {};
   Completer _done;
 
   Future get closed => _done.future;
@@ -20,43 +20,66 @@ class Locker {
       ServerSocket.bind(url, port)
         .then((ServerSocket sSocket) {
           Locker locker = new Locker.config(sSocket);
-          locker.serverSocket.listen(locker.handleClient);
+          locker.serverSocket.listen(locker.handleClient, onDone:() => print("socket done"));
           locker._done = new Completer();
           return locker;
         });
 
+  // Removes given socket from requestors and releases its locks
+  _disposeOfSocket(Socket socket) {
+    print("disposing of socket");
+    requestors.forEach((lock, reqList) {
+      while (reqList.removeWhere((e) => e["socket"] == socket));
+    });
+    _removeSocketLocks(socket);
+    clientSockets.remove(socket);
+    checkLockRequestors();
+  }
+
+  _removeSocketLocks(Socket socket) {
+    List toRemove = [];
+    currentLock.forEach((lock, sct) {
+      if (sct["socket"] == socket) toRemove.add(lock);
+    });
+    toRemove.forEach(currentLock.remove);
+  }
+
   handleClient(Socket socket) {
     clientSockets.add(socket);
-    socket.done.then((_) => clientSockets.remove(socket));
+//    socket.done.then((_) => _disposeOfSocket(socket));
     toJsonStream(socket).listen((Map data) {
       if (data["type"] == "lock") handleLockRequest(data["data"], socket);
-    });
+    }, onDone: () => _disposeOfSocket(socket));
   }
 
   handleLockRequest(Map req, Socket socket) =>
-    (req["action"] == "get" ? _addRequestor : _releaseLock)(req["id"], socket);
+    (req["action"] == "get" ? _addRequestor : _releaseLock)(req["requestId"], req["lockType"], socket);
 
-  _addRequestor(String id, Socket socket) {
-    // TODO what's the purpose of this?
-    if (requestors == null) requestors = [];
-    // TODO what's the purpose of 'id'? If this was supposed to be type of lock
-    // (i. e. DBlock, deploy_lock, etc, it is not implemented correctly)
-    requestors.add({"id": id, "socket": socket});
+  _addRequestor(String requestId, String lockType, Socket socket) {
+    if (requestors[lockType] == null) requestors[lockType] = [];
+    requestors[lockType].add({"socket" : socket, "requestId": requestId});
     checkLockRequestors();
   }
 
-  _releaseLock(String id, Socket socket) {
-    // TODO shouldn't you check, if the socket removing the lock is really the owner?
-    currentLock.remove("lock");
-    writeJSON(socket, {"result":"ok", "action":"release", "id": id});
-    checkLockRequestors();
+  _releaseLock(String requestId, String lockType, Socket socket) {
+    if (currentLock[lockType] == socket) {
+      currentLock.remove(lockType);
+      writeJSON(socket, {"result":"ok", "action":"release"});
+      checkLockRequestors();
+    } else {
+      writeJSON(socket, {"error": "Cannot release lock when the socket does not own it", "action":"release"});
+    }
   }
 
   checkLockRequestors() {
-    if (!currentLock.containsKey("lock") && requestors.isNotEmpty) {
-      currentLock["lock"] = requestors.removeAt(0);
-      writeJSON(currentLock["lock"]["socket"], {"result":"ok", "action":"get", "id": currentLock["lock"]["id"]});
-    }
+    print("Requestors: $requestors");
+    print("CurrentLock: $currentLock");
+    requestors.forEach((lockType,socketList) {
+      if (requestors[lockType].isNotEmpty && (!currentLock.containsKey(lockType))) {
+        currentLock[lockType] = requestors[lockType].removeAt(0);
+        writeJSON(currentLock[lockType]["socket"], {"result":"ok", "action":"get", "requestId": currentLock[lockType]["requestId"]});
+      }
+    });
   }
 
   Future close() =>
