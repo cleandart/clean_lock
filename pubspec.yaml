@@ -3,4 +3,4 @@ version: 0.0.1
 description: Locking server
 dependencies:
   unittest: any
-  useful: '>=1.0.17'
+  useful: ">=1.0.18"
