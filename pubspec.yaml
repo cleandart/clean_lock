@@ -1,6 +1,8 @@
 name: clean_lock
 version: 0.0.1
+author: Clean Team <clean@vacuumlabs.com>
 description: Locking server
+homepage: https://github.com/cleandart/clean_lock
 dependencies:
   unittest: any
-  useful: ">=1.0.18"
+  useful: ">=1.0.18 <2.0.0"
