@@ -8,7 +8,9 @@ class Locker {
 
   ServerSocket serverSocket;
   List<Socket> clientSockets = [];
+  // lockName: [{socket: Socket, requestId: String}]
   Map<String, List<Map> > requestors = {};
+  // lockName: {socket: Socket, requestId: String}
   Map<String, Map> currentLock = {};
 
   Locker.config(this.serverSocket);
@@ -68,8 +70,8 @@ class Locker {
 
   // Checks if someone can be given their requested lockType
   checkLockRequestors() {
-    requestors.forEach((lockType,socketList) {
-      if (requestors[lockType].isNotEmpty && (!currentLock.containsKey(lockType))) {
+    requestors.forEach((lockType, socketList) {
+      if (socketList.isNotEmpty && (!currentLock.containsKey(lockType))) {
         currentLock[lockType] = requestors[lockType].removeAt(0);
         writeJSON(currentLock[lockType]["socket"], {"result":"ok", "action":"get", "requestId": currentLock[lockType]["requestId"]});
       }
