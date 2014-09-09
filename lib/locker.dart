@@ -8,11 +8,10 @@ class Locker {
 
   ServerSocket serverSocket;
   List<Socket> clientSockets = [];
-  List<Map> requestors = [];
-  Map currentLock = {};
-  Completer _done;
-
-  Future get closed => _done.future;
+  // lockName: [{socket: Socket, requestId: String}]
+  Map<String, List<Map> > requestors = {};
+  // lockName: {socket: Socket, requestId: String}
+  Map<String, Map> currentLock = {};
 
   Locker.config(this.serverSocket);
 
@@ -21,44 +20,69 @@ class Locker {
         .then((ServerSocket sSocket) {
           Locker locker = new Locker.config(sSocket);
           locker.serverSocket.listen(locker.handleClient);
-          locker._done = new Completer();
           return locker;
         });
 
+  // Removes given socket from requestors and releases its locks
+  _disposeOfSocket(Socket socket) {
+    requestors.forEach((lock, reqList) {
+      while (reqList.removeWhere((e) => e["socket"] == socket));
+    });
+    _removeSocketLocks(socket);
+    clientSockets.remove(socket);
+    checkLockRequestors();
+  }
+
+  _removeSocketLocks(Socket socket) {
+    List toRemove = [];
+    currentLock.forEach((lock, sct) {
+      if (sct["socket"] == socket) toRemove.add(lock);
+    });
+    toRemove.forEach(currentLock.remove);
+  }
+
   handleClient(Socket socket) {
     clientSockets.add(socket);
-    socket.done.then((_) => clientSockets.remove(socket));
     toJsonStream(socket).listen((Map data) {
       if (data["type"] == "lock") handleLockRequest(data["data"], socket);
-    });
+    }, onDone: () => _disposeOfSocket(socket));
   }
 
   handleLockRequest(Map req, Socket socket) =>
-    (req["action"] == "get" ? _addRequestor : _releaseLock)(req["id"], socket);
+    (req["action"] == "get" ? _addRequestor : _releaseLock)(req["requestId"], req["lockType"], socket);
 
-  _addRequestor(String id, Socket socket) {
-    if (requestors == null) requestors = [];
-    requestors.add({"id": id, "socket": socket});
+  // Adds the socket with additional data to queue for given lockType
+  _addRequestor(String requestId, String lockType, Socket socket) {
+    if (requestors[lockType] == null) requestors[lockType] = [];
+    requestors[lockType].add({"socket" : socket, "requestId": requestId});
     checkLockRequestors();
   }
 
-  _releaseLock(String id, Socket socket) {
-    currentLock.remove("lock");
-    writeJSON(socket, {"result":"ok", "action":"release", "id": id});
-    checkLockRequestors();
-  }
-
-  checkLockRequestors() {
-    if (!currentLock.containsKey("lock") && requestors.isNotEmpty) {
-      currentLock["lock"] = requestors.removeAt(0);
-      writeJSON(currentLock["lock"]["socket"], {"result":"ok", "action":"get", "id": currentLock["lock"]["id"]});
+  _releaseLock(String requestId, String lockType, Socket socket) {
+    if (currentLock[lockType]["socket"] == socket) {
+      currentLock.remove(lockType);
+      writeJSON(socket, {"result":"ok", "action":"release", "requestId":requestId});
+      checkLockRequestors();
+    } else {
+      writeJSON(socket, {"error": "Cannot release lock when the socket does not own it", "action":"release", "requestId":requestId});
     }
+  }
+
+  // Checks if someone can be given their requested lockType
+  checkLockRequestors() {
+    requestors.forEach((lockType, socketList) {
+      if (socketList.isNotEmpty && (!currentLock.containsKey(lockType))) {
+        currentLock[lockType] = requestors[lockType].removeAt(0);
+        writeJSON(currentLock[lockType]["socket"], {"result":"ok", "action":"get", "requestId": currentLock[lockType]["requestId"]});
+      }
+    });
+
   }
 
   Future close() =>
      Future.wait([
        Future.wait(clientSockets.map((s) => s.close())),
        serverSocket.close()
-     ]).then((_) => _done.complete());
+     ]);
 
 }
