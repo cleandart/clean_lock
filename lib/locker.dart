@@ -66,7 +66,7 @@ class Locker {
       writeJSON(socket, {"result":"ok", "action":"release", "requestId":requestId});
       checkLockRequestors();
     } else {
-      writeJSON(socket, {"error": "Cannot release lock when the socket does not own it", "action":"release"});
+      writeJSON(socket, {"error": "Cannot release lock when the socket does not own it", "action":"release", "requestId":requestId});
     }
   }
 
