@@ -10,9 +10,6 @@ class Locker {
   List<Socket> clientSockets = [];
   Map<String, List<Map> > requestors = {};
   Map<String, Map> currentLock = {};
-  Completer _done;
-
-  Future get closed => _done.future;
 
   Locker.config(this.serverSocket);
 
@@ -21,7 +18,6 @@ class Locker {
         .then((ServerSocket sSocket) {
           Locker locker = new Locker.config(sSocket);
           locker.serverSocket.listen(locker.handleClient);
-          locker._done = new Completer();
           return locker;
         });
 
@@ -85,6 +81,6 @@ class Locker {
      Future.wait([
        Future.wait(clientSockets.map((s) => s.close())),
        serverSocket.close()
-     ]).then((_) => _done.complete());
+     ]);
 
 }
