@@ -30,15 +30,36 @@ class LockRequestor {
       .catchError((e,s) => throw new Exception("LockRequestor was unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
-  Future<String> getLock(String lockType) {
+  Future<String> _getLock(String lockType) {
     Completer completer = _sendRequest(lockType, "get");
     return completer.future;
   }
 
-  Future releaseLock(String lockType) {
+  Future _releaseLock(String lockType) {
     Completer completer = _sendRequest(lockType, "release");
     return completer.future;
   }
+
+  Future withLock(String lockType, callback()) {
+       // Check if it's already running in zone
+       if (Zone.current[#lock] != null) {
+         // It is, check for lock and run
+         if (Zone.current[#lock]["lock"]) {
+           return new Future.sync(callback);
+         } else {
+           // Lock was already released, this shouldn't happen
+           throw new Exception("withLock: Lock was released, but callback is still trying to run in this zone, (maybe there is some Future not waited for?)");
+         }
+       } else {
+         // It's not running in any Zone yet
+         return runZoned(() {
+           return _getLock(lockType)
+            .then((_) => new Future.sync(callback))
+            .whenComplete(() => _releaseLock(lockType))
+            .then((_) => Zone.current[#lock]["lock"] = false);
+         }, zoneValues: {#lock: {"lock" : true}});
+       }
+     }
 
   _sendRequest(String lockType, String action) {
     var requestId = "$prefix--$_lockIdCounter";
