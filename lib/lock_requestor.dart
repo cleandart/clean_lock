@@ -12,9 +12,24 @@ class LockRequestor {
   num _lockIdCounter = 0;
   String prefix = (new Random(new DateTime.now().millisecondsSinceEpoch % (1<<20))).nextDouble().toString();
 
+  String url;
+  int port;
+
+
   Future get done => _lockerSocket.done;
 
-  LockRequestor(this._lockerSocket) {
+  LockRequestor.fromSocket(this._lockerSocket) {
+    _initListeners();
+  }
+
+  LockRequestor(this.url, this.port);
+
+  Future init() =>
+      Socket.connect(url, port)
+        .then((Socket socket) => _lockerSocket = socket)
+        .then((_) => _initListeners());
+
+  _initListeners() {
     toJsonStream(_lockerSocket).listen((Map resp) {
       Completer completer = requestors.remove(resp["requestId"]);
       if (resp.containsKey("error")) {
@@ -26,7 +41,7 @@ class LockRequestor {
   }
 
   static Future<LockRequestor> connect(url, port) =>
-    Socket.connect(url, port).then((Socket socket) => new LockRequestor(socket))
+    Socket.connect(url, port).then((Socket socket) => new LockRequestor.fromSocket(socket))
       .catchError((e,s) => throw new Exception("LockRequestor was unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
