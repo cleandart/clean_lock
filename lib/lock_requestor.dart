@@ -55,24 +55,24 @@ class LockRequestor {
     return completer.future;
   }
 
-  Future withLock(String lockType, callback()) {
-       // Check if it's already running in zone
-       if (Zone.current[#lock] != null) {
-         // It is, check for lock and run
-         if (Zone.current[#lock]["lock"]) {
-           return new Future.sync(callback);
-         } else {
-           // Lock was already released, this shouldn't happen
-           throw new Exception("withLock: Lock was released, but callback is still trying to run in this zone, (maybe there is some Future not waited for?)");
-         }
+  getZoneMetaData() => Zone.current[#meta];
+
+  Future withLock(String lockType, callback(), {dynamic metaData: null}) {
+       // Check if the lock is already acquired
+       if ((Zone.current[#locks] != null) && Zone.current[#locks].contains(lockType)) {
+         return new Future.sync(callback);
        } else {
-         // It's not running in any Zone yet
+         // It's not running in any Zone yet or lock is not acquired
          return runZoned(() {
            return _getLock(lockType)
             .then((_) => new Future.sync(callback))
             .whenComplete(() => _releaseLock(lockType))
-            .then((_) => Zone.current[#lock]["lock"] = false);
-         }, zoneValues: {#lock: {"lock" : true}});
+            .catchError((e,s) => print("error: $e"))
+            .then((_) => (Zone.current[#locks] as Set).remove(lockType));
+         }, zoneValues: {
+           #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
+           #meta: metaData
+         });
        }
      }
 
