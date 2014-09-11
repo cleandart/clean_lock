@@ -12,9 +12,24 @@ class LockRequestor {
   num _lockIdCounter = 0;
   String prefix = (new Random(new DateTime.now().millisecondsSinceEpoch % (1<<20))).nextDouble().toString();
 
+  String url;
+  int port;
+
+
   Future get done => _lockerSocket.done;
 
-  LockRequestor(this._lockerSocket) {
+  LockRequestor.fromSocket(this._lockerSocket) {
+    _initListeners();
+  }
+
+  LockRequestor(this.url, this.port);
+
+  Future init() =>
+      Socket.connect(url, port)
+        .then((Socket socket) => _lockerSocket = socket)
+        .then((_) => _initListeners());
+
+  _initListeners() {
     toJsonStream(_lockerSocket).listen((Map resp) {
       Completer completer = requestors.remove(resp["requestId"]);
       if (resp.containsKey("error")) {
@@ -26,7 +41,7 @@ class LockRequestor {
   }
 
   static Future<LockRequestor> connect(url, port) =>
-    Socket.connect(url, port).then((Socket socket) => new LockRequestor(socket))
+    Socket.connect(url, port).then((Socket socket) => new LockRequestor.fromSocket(socket))
       .catchError((e,s) => throw new Exception("LockRequestor was unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
@@ -40,24 +55,28 @@ class LockRequestor {
     return completer.future;
   }
 
-  Future withLock(String lockType, callback()) {
-       // Check if it's already running in zone
-       if (Zone.current[#lock] != null) {
-         // It is, check for lock and run
-         if (Zone.current[#lock]["lock"]) {
-           return new Future.sync(callback);
-         } else {
-           // Lock was already released, this shouldn't happen
-           throw new Exception("withLock: Lock was released, but callback is still trying to run in this zone, (maybe there is some Future not waited for?)");
-         }
+  getZoneMetaData() => Zone.current[#meta];
+
+  Future withLock(String lockType, callback(), {dynamic metaData: null}) {
+       // Check if the zone it was running in was already finished
+       if ((Zone.current[#finished] != null) && (Zone.current[#finished]['finished'])) {
+         throw new Exception("Zone finished but withLock was called (maybe some future not waited for?)");
+       }
+       // Check if the lock is already acquired
+       if ((Zone.current[#locks] != null) && Zone.current[#locks].contains(lockType)) {
+         return new Future.sync(callback);
        } else {
-         // It's not running in any Zone yet
+         // It's not running in any Zone yet or lock is not acquired
          return runZoned(() {
            return _getLock(lockType)
             .then((_) => new Future.sync(callback))
             .whenComplete(() => _releaseLock(lockType))
-            .then((_) => Zone.current[#lock]["lock"] = false);
-         }, zoneValues: {#lock: {"lock" : true}});
+            .then((_) => Zone.current[#finished]['finished'] = true);
+         }, zoneValues: {
+           #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
+           #meta: metaData,
+           #finished: {"finished" : false}
+         });
        }
      }
 
