@@ -15,6 +15,10 @@ run() {
         .then((LockRequestor lockR) => lockRequestor = lockR);
   });
 
+  tearDown(() {
+    return lockRequestor.close();
+  });
+
   test("withLock should throw if callback is not waiting for futures", () {
     var callback = () {
       Future lateFuture = new Future.delayed(new Duration(milliseconds:300),
