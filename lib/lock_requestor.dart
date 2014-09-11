@@ -71,7 +71,6 @@ class LockRequestor {
            return _getLock(lockType)
             .then((_) => new Future.sync(callback))
             .whenComplete(() => _releaseLock(lockType))
-            .catchError((e,s) => print("error: $e"))
             .then((_) => (Zone.current[#locks] as Set).remove(lockType))
             .then((_) => Zone.current[#finished]['finished'] = true);
          }, zoneValues: {
