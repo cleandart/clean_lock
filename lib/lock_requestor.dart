@@ -71,7 +71,6 @@ class LockRequestor {
            return _getLock(lockType)
             .then((_) => new Future.sync(callback))
             .whenComplete(() => _releaseLock(lockType))
-            .then((_) => (Zone.current[#locks] as Set).remove(lockType))
             .then((_) => Zone.current[#finished]['finished'] = true);
          }, zoneValues: {
            #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
