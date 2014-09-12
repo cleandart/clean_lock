@@ -15,6 +15,7 @@ class LockRequestor {
   String url;
   int port;
 
+  StreamSubscription ss;
 
   Future get done => _lockerSocket.done;
 
@@ -30,12 +31,14 @@ class LockRequestor {
         .then((_) => _initListeners());
 
   _initListeners() {
-    toJsonStream(_lockerSocket).listen((Map resp) {
+    ss = toJsonStream(_lockerSocket).listen((Map resp) {
       Completer completer = requestors.remove(resp["requestId"]);
       if (resp.containsKey("error")) {
         completer.completeError(resp["error"]);
       } else if (resp.containsKey("result")) {
         completer.complete();
+      } else {
+        throw new Exception("Unknown response from _lockerSocket");
       }
     });
   }
@@ -89,6 +92,6 @@ class LockRequestor {
     return completer;
   }
 
-  Future close() => _lockerSocket.close();
+  Future close() => _lockerSocket.close().then((_) => ss.cancel()).then((_) => _lockerSocket.destroy());
 
 }
