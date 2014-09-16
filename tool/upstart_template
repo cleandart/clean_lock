@@ -5,6 +5,8 @@ start on (filesystem and started mongodb)
 
 stop on stopped mongodb
 
+respawn
+
 respawn limit 5 5
 
 script
