@@ -1,9 +1,7 @@
 description "Mongo lock server"
 author      "Vacuumlabs"
 
-start on (filesystem and started mongodb)
-
-stop on stopped mongodb
+start on filesystem
 
 respawn
 
