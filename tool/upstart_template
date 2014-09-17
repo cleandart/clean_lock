@@ -1,4 +1,4 @@
-description "Mongo lock server"
+description "Lock server"
 author      "Vacuumlabs"
 
 start on filesystem
