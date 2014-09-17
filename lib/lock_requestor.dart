@@ -5,11 +5,11 @@ import 'dart:io';
 import 'dart:math';
 import 'package:useful/socket_jsonizer.dart';
 
-class LockRequestorPipeException implements Exception {
+class LockRequestorException implements Exception {
 
   final String message;
 
-  const LockRequestorPipeException([String this.message = ""]);
+  const LockRequestorException([String this.message = ""]);
 
   String toString() => "LockRequestor exception: $message";
 }
@@ -34,12 +34,13 @@ class LockRequestor {
 
   LockRequestor(this.url, this.port);
 
+  // Zone needed for catching broken pipe exceptions (e.g. server restarted) happening somewhere in future
   Future init() =>
       runZoned(() =>
         Socket.connect(url, port)
           .then((Socket socket) => _lockerSocket = socket)
           .then((_) => _initListeners()),
-      onError: (e) => throw new LockRequestorPipeException(e.toString()));
+      onError: (e) => e is SocketException ? throw new LockRequestorException(e.toString()) : throw e);
 
   _initListeners() {
     ss = toJsonStream(_lockerSocket).listen((Map resp) {
@@ -51,12 +52,12 @@ class LockRequestor {
       } else {
         throw new Exception("Unknown response from _lockerSocket");
       }
-    }, onError: (e) => throw new LockRequestorPipeException(e.toString()));
+    }, onError: (e) => throw new LockRequestorException(e.toString()));
   }
 
   static Future<LockRequestor> connect(url, port) =>
     Socket.connect(url, port).then((Socket socket) => new LockRequestor.fromSocket(socket))
-      .catchError((e,s) => throw new LockRequestorPipeException("LockRequestor was unable to connect to url: $url, port: $port, (is Locker running?)"));
+      .catchError((e,s) => throw new LockRequestorException("LockRequestor was unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
   Future<String> _getLock(String lockType) {
