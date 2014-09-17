@@ -1,9 +1,9 @@
-description "Mongo lock server"
+description "Lock server"
 author      "Vacuumlabs"
 
-start on (filesystem and started mongodb)
+start on filesystem
 
-stop on stopped mongodb
+respawn
 
 respawn limit 5 5
 
