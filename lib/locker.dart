@@ -5,7 +5,7 @@ import 'dart:async';
 import 'package:useful/socket_jsonizer.dart';
 import 'package:clean_logging/logger.dart';
 
-Logger _logger = new Logger('clean_logging.locker');
+Logger _logger = new Logger('clean_lock.locker');
 
 class Locker {
 

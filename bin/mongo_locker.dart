@@ -11,6 +11,8 @@ String defaultLogMessage(Map rec) {
 
 defaultLoggingHandler(Map rec) => print(defaultLogMessage(rec));
 
+Logger _logger = new Logger('clean_lock.locker');
+
 main(List<String> args) {
   if (args.length != 2) {
     print("You have to specify url and port");
@@ -21,5 +23,5 @@ main(List<String> args) {
   var url = args[0];
   var port = num.parse(args[1]);
   return Locker.bind(url, port)
-      .then((_) => print("Locker running on ${args}"));
+      .then((_) => _logger.info("Locker started - running on ${args}"));
 }
