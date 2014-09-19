@@ -3,6 +3,9 @@ library clean_lock.locker;
 import 'dart:io';
 import 'dart:async';
 import 'package:useful/socket_jsonizer.dart';
+import 'package:clean_logging/logger.dart';
+
+Logger _logger = new Logger('clean_logging.locker');
 
 class Locker {
 
@@ -18,6 +21,7 @@ class Locker {
   static Future<Locker> bind(url, port) =>
       ServerSocket.bind(url, port)
         .then((ServerSocket sSocket) {
+          _logger.info('Locker running on $url, $port');
           Locker locker = new Locker.config(sSocket);
           locker.serverSocket.listen(locker.handleClient);
           return locker;
@@ -25,7 +29,7 @@ class Locker {
 
   // Removes given socket from requestors and releases its locks
   _disposeOfSocket(Socket socket) {
-    socket.close();
+    socket.close().then((_) => socket.destroy());
     requestors.forEach((lock, reqList) {
       while (reqList.removeWhere((e) => e["socket"] == socket));
     });
@@ -39,6 +43,7 @@ class Locker {
     currentLock.forEach((lock, sct) {
       if (sct["socket"] == socket) toRemove.add(lock);
     });
+    if (toRemove.isNotEmpty) _logger.warning('Socket disconnected - it held locks $toRemove, now they are released');
     toRemove.forEach(currentLock.remove);
   }
 
@@ -62,6 +67,7 @@ class Locker {
   _releaseLock(String requestId, String lockType, Socket socket) {
     if (currentLock[lockType]["socket"] == socket) {
       currentLock.remove(lockType);
+      _logger.fine('Lock type $lockType released');
       writeJSON(socket, {"result":"ok", "action":"release", "requestId":requestId});
       checkLockRequestors();
     } else {
@@ -74,6 +80,7 @@ class Locker {
     requestors.forEach((lockType, socketList) {
       if (socketList.isNotEmpty && (!currentLock.containsKey(lockType))) {
         currentLock[lockType] = requestors[lockType].removeAt(0);
+        _logger.fine('Lock type $lockType acquired');
         writeJSON(currentLock[lockType]["socket"], {"result":"ok", "action":"get", "requestId": currentLock[lockType]["requestId"]});
       }
     });
