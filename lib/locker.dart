@@ -27,7 +27,7 @@ class Locker {
   _disposeOfSocket(Socket socket) {
     socket.close();
     requestors.forEach((lock, reqList) {
-      while (reqList.removeWhere((e) => e["socket"] == socket));
+      reqList.removeWhere((e) => e["socket"] == socket);
     });
     _removeSocketLocks(socket);
     clientSockets.remove(socket);
@@ -55,6 +55,7 @@ class Locker {
   // Adds the socket with additional data to queue for given lockType
   _addRequestor(String requestId, String lockType, Socket socket) {
     if (requestors[lockType] == null) requestors[lockType] = [];
+    print('Adding requestor $requestId for $lockType.');
     requestors[lockType].add({"socket" : socket, "requestId": requestId});
     checkLockRequestors();
   }
@@ -62,6 +63,7 @@ class Locker {
   _releaseLock(String requestId, String lockType, Socket socket) {
     if (currentLock[lockType]["socket"] == socket) {
       currentLock.remove(lockType);
+      print('Removing requestor $requestId for $lockType');
       writeJSON(socket, {"result":"ok", "action":"release", "requestId":requestId});
       checkLockRequestors();
     } else {
