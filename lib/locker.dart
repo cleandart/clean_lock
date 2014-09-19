@@ -77,6 +77,8 @@ class Locker {
 
   // Checks if someone can be given their requested lockType
   checkLockRequestors() {
+    _logger.finest('Current locks held: $currentLock');
+    _logger.finest('Current requestors: $requestors');
     requestors.forEach((lockType, socketList) {
       if (socketList.isNotEmpty && (!currentLock.containsKey(lockType))) {
         currentLock[lockType] = requestors[lockType].removeAt(0);
