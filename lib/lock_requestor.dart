@@ -52,7 +52,8 @@ class LockRequestor {
       } else {
         throw new Exception("Unknown response from _lockerSocket");
       }
-    }, onError: (e) => throw new LockRequestorException(e.toString()));
+    }, onError: (e) => throw new LockRequestorException(e.toString())
+    , onDone: () => throw new LockRequestorException("ServerSocket is done (probably crashed) this shouldn't happen"));
   }
 
   static Future<LockRequestor> connect(url, port) =>
