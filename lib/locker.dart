@@ -43,7 +43,8 @@ class Locker {
     currentLock.forEach((lock, sct) {
       if (sct["socket"] == socket) toRemove.add(lock);
     });
-    if (toRemove.isNotEmpty) _logger.warning('Socket disconnected - it held locks $toRemove, now they are released');
+    if (toRemove.isNotEmpty) _logger.warning('Socket disconnected - it '
+        'held locks $toRemove, now they are released');
     toRemove.forEach(currentLock.remove);
   }
 

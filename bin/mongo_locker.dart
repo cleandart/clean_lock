@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:clean_lock/locker.dart';
 import 'package:clean_logging/logger.dart';
+import 'package:args/args.dart';
 
 String defaultLogMessage(Map rec) {
   var error = rec['error'] == null ? '' : '\n${rec['error']}';
@@ -14,14 +15,17 @@ defaultLoggingHandler(Map rec) => print(defaultLogMessage(rec));
 Logger _logger = new Logger('clean_lock.locker');
 
 main(List<String> args) {
-  if (args.length != 2) {
-    print("You have to specify url and port");
-    return new Future.value(null);
-  }
+  ArgParser parser = new ArgParser();
+  parser.addFlag('debug', abbr: 'd', defaultsTo: false);
+  parser.addOption('host', abbr: 'h');
+  parser.addOption('port', abbr: 'p');
+  ArgResults res = parser.parse(args);
+  var url = res['host'];
+  var port = num.parse(res['port']);
+  bool debug = res['debug'];
   Logger.onRecord.listen(defaultLoggingHandler);
-  Logger.ROOT.logLevel = Level.FINEST;
-  var url = args[0];
-  var port = num.parse(args[1]);
+  Logger.ROOT.logLevel = debug ? Level.ALL : Level.INFO;
+
   return Locker.bind(url, port)
-      .then((_) => _logger.info("Locker started - running on ${args}"));
+      .then((_) => _logger.info("Locker started - running on ${res['host']}, ${res['port']}"));
 }

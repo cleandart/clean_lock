@@ -57,7 +57,8 @@ class LockRequestor {
 
   static Future<LockRequestor> connect(url, port) =>
     Socket.connect(url, port).then((Socket socket) => new LockRequestor.fromSocket(socket))
-      .catchError((e,s) => throw new LockRequestorException("LockRequestor was unable to connect to url: $url, port: $port, (is Locker running?)"));
+      .catchError((e,s) => throw new LockRequestorException("LockRequestor was "
+                "unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
   Future<String> _getLock(String lockType) {
