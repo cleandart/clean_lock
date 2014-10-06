@@ -6,7 +6,8 @@ import 'package:args/args.dart';
 String defaultLogMessage(Map rec) {
   var error = rec['error'] == null ? '' : '\n${rec['error']}';
   var stackTrace = rec['stackTrace'] == null ? '' : '\n${rec['stackTrace']}';
-  return ('${rec['fullSource']}\t[${rec['level']}]\t${new DateTime.fromMillisecondsSinceEpoch(rec['timestamp'])}\t'
+  return ('${rec['fullSource']}\t[${rec['level']}]\t'
+          '${new DateTime.fromMillisecondsSinceEpoch(rec['timestamp'])}\t'
           '${rec['event']}\t${error}\t${stackTrace}\t');
 }
 
@@ -20,12 +21,18 @@ main(List<String> args) {
   parser.addOption('host', abbr: 'h');
   parser.addOption('port', abbr: 'p');
   ArgResults res = parser.parse(args);
-  var url = res['host'];
+  var host = res['host'];
   var port = num.parse(res['port']);
   bool debug = res['debug'];
+
+  if (host == null || port == null) {
+    print("You have to specify url and port");
+    return new Future.value(null);
+  }
+
   Logger.onRecord.listen(defaultLoggingHandler);
   Logger.ROOT.logLevel = debug ? Level.ALL : Level.INFO;
 
-  return Locker.bind(url, port)
-      .then((_) => _logger.info("Locker started - running on ${res['host']}, ${res['port']}"));
+  return Locker.bind(host, port)
+      .then((_) => _logger.info("Locker started - running on $host, $port"));
 }
