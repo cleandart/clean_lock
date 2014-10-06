@@ -29,7 +29,7 @@ class Locker {
 
   // Removes given socket from requestors and releases its locks
   _disposeOfSocket(Socket socket) {
-    socket.close().then((_) => socket.destroy());
+    socket.close();
     requestors.forEach((lock, reqList) {
       while (reqList.removeWhere((e) => e["socket"] == socket));
     });
