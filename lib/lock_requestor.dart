@@ -61,19 +61,20 @@ class LockRequestor {
                 "unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
-  Future<String> _getLock(String lockType) {
-    Completer completer = _sendRequest(lockType, "get");
+  Future<String> _getLock(String lockType, String author) {
+    Completer completer = _sendRequest(lockType, "get", author);
     return completer.future;
   }
 
-  Future _releaseLock(String lockType) {
-    Completer completer = _sendRequest(lockType, "release");
+  Future _releaseLock(String lockType, String author) {
+    Completer completer = _sendRequest(lockType, "release", author);
     return completer.future;
   }
 
   getZoneMetaData() => Zone.current[#meta];
 
-  Future withLock(String lockType, callback(), {dynamic metaData: null}) {
+  Future withLock(String lockType, callback(), {dynamic metaData: null,
+    String author: null}) {
        // Check if the zone it was running in was already finished
        if ((Zone.current[#finished] != null) && (Zone.current[#finished]['finished'])) {
          throw new Exception("Zone finished but withLock was called (maybe some future not waited for?)");
@@ -84,9 +85,9 @@ class LockRequestor {
        } else {
          // It's not running in any Zone yet or lock is not acquired
          return runZoned(() {
-           return _getLock(lockType)
+           return _getLock(lockType, author)
             .then((_) => new Future.sync(callback))
-            .whenComplete(() => _releaseLock(lockType))
+            .whenComplete(() => _releaseLock(lockType, author))
             .then((_) => Zone.current[#finished]['finished'] = true);
          }, zoneValues: {
            #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
@@ -96,7 +97,7 @@ class LockRequestor {
        }
      }
 
-  _sendRequest(String lockType, String action) {
+  _sendRequest(String lockType, String action, String author) {
     var requestId = "$prefix--$_lockIdCounter";
     _lockIdCounter++;
     Completer completer = new Completer();

@@ -52,16 +52,30 @@ class Locker {
     clientSockets.add(socket);
     toJsonStream(socket).listen((Map data) {
       if (data["type"] == "lock") handleLockRequest(data["data"], socket);
+      if (data["type"] == "info") handleInfoRequest(socket);
     }, onDone: () => _disposeOfSocket(socket));
   }
 
-  handleLockRequest(Map req, Socket socket) =>
-    (req["action"] == "get" ? _addRequestor : _releaseLock)(req["requestId"], req["lockType"], socket);
+  handleInfoRequest(Socket socket) {
+    writeJSON(socket, {"requestors": requestors, "currentLock": currentLock});
+  }
+
+  handleLockRequest(Map req, Socket socket) {
+    var rid = req["requestId"];
+    var lt = req["lockType"];
+    if (req["action"] == "get") {
+      return _addRequestor(rid, req["author"], lt, socket);
+    }
+    else {
+      return _releaseLock(rid, lt, socket);
+    }
+  }
 
   // Adds the socket with additional data to queue for given lockType
-  _addRequestor(String requestId, String lockType, Socket socket) {
+  _addRequestor(String requestId, String author, String lockType, Socket socket)
+  {
     if (requestors[lockType] == null) requestors[lockType] = [];
-    requestors[lockType].add({"socket" : socket, "requestId": requestId});
+    requestors[lockType].add({"socket" : socket, "requestId": requestId, "author": author});
     checkLockRequestors();
   }
 

@@ -21,14 +21,15 @@ main(List<String> args) {
   parser.addOption('host', abbr: 'h');
   parser.addOption('port', abbr: 'p');
   ArgResults res = parser.parse(args);
-  var host = res['host'];
-  var port = num.parse(res['port']);
-  bool debug = res['debug'];
 
-  if (host == null || port == null) {
+  if (res['host'] == null || res['port'] == null) {
     print("You have to specify url and port");
     return new Future.value(null);
   }
+
+  var host = res['host'];
+  var port = num.parse(res['port']);
+  bool debug = res['debug'];
 
   Logger.onRecord.listen(defaultLoggingHandler);
   Logger.ROOT.logLevel = debug ? Level.ALL : Level.INFO;
