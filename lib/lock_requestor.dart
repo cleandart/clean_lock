@@ -62,12 +62,12 @@ class LockRequestor {
 
   // Obtains lock and returns unique ID for the holder
   Future<String> _getLock(String lockType, String author) {
-    Completer completer = _sendRequest(lockType, "get", author);
+    Completer completer = _sendRequest(lockType, "get", author: author);
     return completer.future;
   }
 
   Future _releaseLock(String lockType, String author) {
-    Completer completer = _sendRequest(lockType, "release", author);
+    Completer completer = _sendRequest(lockType, "release");
     return completer.future;
   }
 
@@ -97,12 +97,19 @@ class LockRequestor {
        }
      }
 
-  _sendRequest(String lockType, String action, String author) {
+  _sendRequest(String lockType, String action, {String author: null}) {
     var requestId = "$prefix--$_lockIdCounter";
     _lockIdCounter++;
     Completer completer = new Completer();
     requestors[requestId] = completer;
-    writeJSON(_lockerSocket, {"type": "lock", "data" : {"lockType": lockType, "action" : action, "requestId" : requestId}});
+    var json = {"type": "lock",
+                "data" : {"lockType": lockType,
+                          "action" : action,
+                          "requestId" : requestId,
+                          "author": author,
+                         }
+               };
+    writeJSON(_lockerSocket, json);
     return completer;
   }
 
