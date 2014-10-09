@@ -7,7 +7,6 @@ main() {
 }
 
 run() {
-
   LockRequestor lockRequestor;
 
   setUp(() {
@@ -70,7 +69,31 @@ run() {
     infiniteRWL(increase);
 
     return new Future.delayed(new Duration(seconds:5));
+  });
 
+  skip_test("withLock should not timeout when lock is available", () {
+    var acquiredLock = false;
+
+    var lock = lockRequestor.withLock("lock", () => acquiredLock = true, timeout: new Duration(milliseconds: 500));
+
+    new Future.delayed(new Duration(milliseconds: 100))
+      .then((_) {
+        expect(acquiredLock, isTrue, reason: "Failed to acquire lock");
+      });
+
+    return lock;
+  });
+
+  test("withLock should timeout when lock is not available", () {
+    var lock1 = lockRequestor.withLock("lock", () => new Future.delayed(new Duration(seconds: 2)), author: '1');
+
+    var acquiredLock = false;
+
+    var lock2 = lockRequestor.withLock("lock", () => acquiredLock = true, timeout: new Duration(milliseconds: 500));
+
+    expect(lock2 , throws);
+
+    return lock1;
   });
 
 }

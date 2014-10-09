@@ -73,29 +73,41 @@ class LockRequestor {
 
   getZoneMetaData() => Zone.current[#meta];
 
-  Future withLock(String lockType, callback(), {dynamic metaData: null,
-    String author: null}) {
-       // Check if the zone it was running in was already finished
-       if ((Zone.current[#finished] != null) && (Zone.current[#finished]['finished'])) {
-         throw new Exception("Zone finished but withLock was called (maybe some future not waited for?)");
-       }
-       // Check if the lock is already acquired
-       if ((Zone.current[#locks] != null) && Zone.current[#locks].contains(lockType)) {
-         return new Future.sync(callback);
-       } else {
-         // It's not running in any Zone yet or lock is not acquired
-         return runZoned(() {
-           return _getLock(lockType, author)
-            .then((_) => new Future.sync(callback))
-            .whenComplete(() => _releaseLock(lockType, author))
-            .then((_) => Zone.current[#finished]['finished'] = true);
-         }, zoneValues: {
-           #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
-           #meta: metaData,
-           #finished: {"finished" : false}
-         });
-       }
-     }
+  Future withLock(String lockType, callback(), {Duration timeout: null,
+    dynamic metaData: null, String author: null}) {
+    // Check if the zone it was running in was already finished
+    if ((Zone.current[#finished] != null) && (Zone.current[#finished]['finished'])) {
+      throw new Exception("Zone finished but withLock was called (maybe some future not waited for?)");
+    }
+    // Check if the lock is already acquired
+    if ((Zone.current[#locks] != null) && Zone.current[#locks].contains(lockType)) {
+      return new Future.sync(callback);
+    } else {
+      // It's not running in any Zone yet or lock is not acquired
+      return runZoned(() {
+        Future lockFuture = _getLock(lockType, author);
+        Future lockOrTimeoutFuture = lockFuture;
+
+        if (timeout != null) {
+          lockOrTimeoutFuture = lockOrTimeoutFuture.timeout(timeout, onTimeout: () =>
+              throw new LockRequestorException("Timed out while waiting for lock '$lockType'"));
+        }
+
+        Future result = lockOrTimeoutFuture
+            .then((_) => new Future.sync(callback));
+
+        Future.wait([lockFuture, result])
+          .whenComplete(() {print("releasing lock $author"); _releaseLock(lockType, author);})
+          .then((_) => Zone.current[#finished]['finished'] = true);
+
+        return result;
+      }, zoneValues: {
+        #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
+        #meta: metaData,
+        #finished: {"finished" : false}
+      });
+    }
+  }
 
   _sendRequest(String lockType, String action, String author) {
     var requestId = "$prefix--$_lockIdCounter";
