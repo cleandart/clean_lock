@@ -66,17 +66,26 @@ class Locker {
     if (req["action"] == "get") {
       return _addRequestor(rid, req["author"], lt, socket);
     }
+    else if (req["action"] == "cancel") {
+      return _cancelRequestor(rid, lt, socket);
+    }
     else {
       return _releaseLock(rid, lt, socket);
     }
   }
 
   // Adds the socket with additional data to queue for given lockType
-  _addRequestor(String requestId, String author, String lockType, Socket socket)
-  {
+  _addRequestor(String requestId, String author, String lockType, Socket socket) {
     if (requestors[lockType] == null) requestors[lockType] = [];
     requestors[lockType].add({"socket" : socket, "requestId": requestId, "author": author});
     checkLockRequestors();
+  }
+
+  _cancelRequestor(String requestId, String lockType, Socket socket) {
+    if (requestors[lockType] != null) {
+      requestors[lockType].removeWhere((requestor) => requestor["socket"] == socket);
+      writeJSON(socket, {"result": "ok", "action": "cancel", "requestId": requestId});
+    }
   }
 
   _releaseLock(String requestId, String lockType, Socket socket) {

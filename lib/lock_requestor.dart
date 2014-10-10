@@ -71,6 +71,11 @@ class LockRequestor {
     return completer.future;
   }
 
+  Future _cancelLock(String lockType, String author) {
+    Completer completer = _sendRequest(lockType, "cancel", author);
+    return completer.future;
+  }
+
   getZoneMetaData() => Zone.current[#meta];
 
   Future withLock(String lockType, callback(), {Duration timeout: null,
@@ -86,21 +91,28 @@ class LockRequestor {
       // It's not running in any Zone yet or lock is not acquired
       return runZoned(() {
         Future lockFuture = _getLock(lockType, author);
-        Future lockOrTimeoutFuture = lockFuture;
 
         if (timeout != null) {
-          lockOrTimeoutFuture = lockOrTimeoutFuture.timeout(timeout, onTimeout: () =>
-              throw new LockRequestorException("Timed out while waiting for lock '$lockType'"));
+          lockFuture = lockFuture.timeout(timeout);
         }
 
-        Future result = lockOrTimeoutFuture
-            .then((_) => new Future.sync(callback));
+        release() {
+          _releaseLock(lockType, author);
+          Zone.current[#finished]["finished"] = true;
+        }
 
-        Future.wait([lockFuture, result])
-          .whenComplete(() {print("releasing lock $author"); _releaseLock(lockType, author);})
-          .then((_) => Zone.current[#finished]['finished'] = true);
-
-        return result;
+        return lockFuture
+          .then((_) => new Future.sync(callback))
+          .then((_) {
+            release();
+          }, onError: (e) {
+            if (e is TimeoutException) {
+              _cancelLock(lockType, author);
+              throw new LockRequestorException("Timed out while waiting for lock '$lockType'");
+            } else {
+              release();
+            }
+          });
       }, zoneValues: {
         #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
         #meta: metaData,

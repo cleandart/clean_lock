@@ -71,7 +71,7 @@ run() {
     return new Future.delayed(new Duration(seconds:5));
   });
 
-  skip_test("withLock should not timeout when lock is available", () {
+  test("withLock should not timeout when lock is available", () {
     var acquiredLock = false;
 
     var lock = lockRequestor.withLock("lock", () => acquiredLock = true, timeout: new Duration(milliseconds: 500));
@@ -91,7 +91,7 @@ run() {
 
     var lock2 = lockRequestor.withLock("lock", () => acquiredLock = true, timeout: new Duration(milliseconds: 500));
 
-    expect(lock2 , throws);
+    expect(lock2 , throwsA(new isInstanceOf<LockRequestorException>()));
 
     return lock1;
   });
