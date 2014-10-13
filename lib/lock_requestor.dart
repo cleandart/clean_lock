@@ -66,7 +66,7 @@ class LockRequestor {
     return completer.future;
   }
 
-  Future _releaseLock(String lockType, String author) {
+  Future _releaseLock(String lockType) {
     Completer completer = _sendRequest(lockType, "release");
     return completer.future;
   }
@@ -87,7 +87,7 @@ class LockRequestor {
          return runZoned(() {
            return _getLock(lockType, author)
             .then((_) => new Future.sync(callback))
-            .whenComplete(() => _releaseLock(lockType, author))
+            .whenComplete(() => _releaseLock(lockType))
             .then((_) => Zone.current[#finished]['finished'] = true);
          }, zoneValues: {
            #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
