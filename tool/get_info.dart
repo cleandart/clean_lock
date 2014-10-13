@@ -37,8 +37,6 @@ void prettyPrint(Map<String, Map> response, bool showEmpty) {
   var requestors = response["requestors"];
   var lockOwners = response["currentLock"];
 
-  print("Lock requestors:\n");
-
   requestors.forEach((lock, requestors) {
     if (requestors.isNotEmpty || showEmpty) {
       var lockOwner = lockOwners[lock];
