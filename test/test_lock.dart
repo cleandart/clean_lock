@@ -1,5 +1,6 @@
-import "package:unittest/unittest.dart";
 import 'dart:async';
+import 'dart:math';
+import "package:unittest/unittest.dart";
 import 'package:clean_lock/lock_requestor.dart';
 
 main() {
@@ -8,6 +9,9 @@ main() {
 
 run() {
   LockRequestor lockRequestor;
+
+  var random = new Random();
+  randomLock() => "test-lock-${random.nextInt(1000)}";
 
   setUp(() {
     return LockRequestor.connect("127.0.0.1", 27002)
@@ -18,17 +22,24 @@ run() {
     return lockRequestor.close();
   });
 
-  test("withLock should throw if callback is not waiting for futures", () {
-    var callback = () {
-      Future lateFuture = new Future.delayed(new Duration(milliseconds:300),
-          () => lockRequestor.withLock("random lock",() {}));
+  test("withLock should throw an exception if callback is not waiting for futures", () {
+    callback() {
+      Future lateFuture = new Future.delayed(new Duration(milliseconds: 300),
+          () => print("this should not be called"));
+
       return new Future.value(null);
-    };
+    }
+
     bool caughtError = false;
+
     runZoned(() {
-        lockRequestor.withLock("random lock",callback);
-    }, onError: (e) => caughtError = true);
-    return new Future.delayed(new Duration(milliseconds:800), () => expect(caughtError,isTrue));
+      lockRequestor.withLock(randomLock(), callback);
+    }, onError: (e, s) {
+      caughtError = true;
+      print("caught $e\n$s");
+    });
+
+    return new Future.delayed(new Duration(milliseconds: 800), () => expect(caughtError, isTrue));
   });
 
   test("should handle nested locking", () {

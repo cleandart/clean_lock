@@ -100,21 +100,47 @@ class Locker {
     checkLockRequestors();
   }
 
-  _cancelRequestor(String requestId, String callId, String lockType, Socket socket) {
-    if (requestors[lockType] != null) {
-      requestors[lockType].removeWhere((requestor) => requestor["socket"] == socket);
-      writeJSON(socket, {"result": "ok", "action": "cancel", "requestId": requestId});
+  _tryReleaseLock(String requestId, String callId, String lockType, Socket socket) {
+    if (currentLock[lockType]["socket"] == socket && currentLock[lockType]["callId"] == callId) {
+      currentLock.remove(lockType);
+      _logger.fine('Lock type $lockType released');
+      return true;
+    } else {
+      return false;
     }
   }
 
   _releaseLock(String requestId, String callId, String lockType, Socket socket) {
-    if (currentLock[lockType]["socket"] == socket && currentLock[lockType]["callId"] == callId) {
-      currentLock.remove(lockType);
-      _logger.fine('Lock type $lockType released');
-      writeJSON(socket, {"result": "ok", "action": "release", "requestId": requestId});
+    if (_tryReleaseLock(requestId, callId, lockType, socket)) {
+      writeJSON(socket, {"result":"ok", "action":"release", "requestId":requestId});
       checkLockRequestors();
     } else {
       writeJSON(socket, {"error": "Cannot release lock when the socket does not own it", "action":"release", "requestId":requestId});
+    }
+  }
+
+  _tryCancelRequestor(String requestId, String callId, String lockType, Socket socket) {
+    if (requestors[lockType] != null) {
+      var count = 0;
+      requestors[lockType].removeWhere((requestor) {
+        if (requestor["socket"] == socket && requestor["callId"] == callId) {
+          count++;
+          return true;
+        } else {
+          return false;
+        }
+      });
+      return count > 0;
+    }
+    return false;
+  }
+
+  _cancelRequestor(String requestId, String callId, String lockType, Socket socket) {
+    if (_tryReleaseLock(requestId, callId, lockType, socket) ||
+        _tryCancelRequestor(requestId, callId, lockType, socket)) {
+      writeJSON(socket, {"result": "ok", "action": "cancel", "requestId": requestId});
+    } else {
+      writeJSON(socket, {"error": "Cannot cancel requestor when the socket does not own it nor waits for it", "action": "cancel", "requestId": requestId});
     }
   }
 

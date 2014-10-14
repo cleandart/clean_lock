@@ -14,6 +14,11 @@ class LockRequestorException implements Exception {
   String toString() => "LockRequestor exception: $message";
 }
 
+class _Bool {
+  bool value;
+  _Bool([bool this.value = false]);
+}
+
 class LockRequestor {
 
   Map <String, Completer> requestors = {};
@@ -63,18 +68,29 @@ class LockRequestor {
                 "unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
-  Future<String> _getLock(String lockType, String callId, String author) {
+  Future<String> _getLock(String lockType, String callId, Duration timeout, String author) {
     Completer completer = _sendRequest(lockType, "get", callId: callId, author: author);
-    return completer.future;
+    Future future = completer.future;
+
+    if (timeout != null) {
+      future = future.timeout(timeout)
+        .catchError((_) =>
+            _cancelLock(lockType, callId)
+            .then((_) =>
+                throw new LockRequestorException("Timed out while waiting for lock '$lockType'")),
+          test: (e) => e is TimeoutException);
+    }
+
+    return future;
   }
 
   Future _releaseLock(String lockType, String callId) {
-    Completer completer = _sendRequest(lockType, "release");
+    Completer completer = _sendRequest(lockType, "release", callId: callId);
     return completer.future;
   }
 
   Future _cancelLock(String lockType, String callId) {
-    Completer completer = _sendRequest(lockType, "cancel");
+    Completer completer = _sendRequest(lockType, "cancel", callId: callId);
     return completer.future;
   }
 
@@ -82,45 +98,46 @@ class LockRequestor {
 
   Future withLock(String lockType, callback(), {Duration timeout: null,
     dynamic metaData: null, String author: null}) {
-    // Check if the zone it was running in was already finished
-    if ((Zone.current[#finished] != null) && (Zone.current[#finished]['finished'])) {
-      throw new Exception("Zone finished but withLock was called (maybe some future not waited for?)");
+    runIfActive(Zone zone, f()) {
+      if (zone[#active].value) {
+        return f();
+      } else {
+        throw new Exception("Zone has already finished (maybe a future was not waited for?)");
+      }
     }
-    // Check if the lock is already acquired
+
+    deactivateZone() => Zone.current[#active].value = false;
+
+    var zoneSpec = new ZoneSpecification(
+      run: (self, parent, zone, f) {
+        runIfActive(self, () => parent.run(zone, f));
+//        parent.run(zone, f);
+      },
+      runUnary: (self, parent, zone, f, arg) {
+        runIfActive(self, () => parent.runUnary(zone, f, arg));
+//        parent.runUnary(zone, f, arg);
+      },
+      runBinary: (self, parent, zone, f, arg1, arg2) {
+        runIfActive(self, () => parent.runBinary(zone, f, arg1, arg2));
+//        parent.runBinary(zone, f, arg1, arg2);
+      }
+    );
+
     if ((Zone.current[#locks] != null) && Zone.current[#locks].contains(lockType)) {
       return new Future.sync(callback);
     } else {
       // It's not running in any Zone yet or lock is not acquired
       return runZoned(() {
         var callId = "${_callIdCounter++}";
-        Future lockFuture = _getLock(lockType, callId, author);
-
-        if (timeout != null) {
-          lockFuture = lockFuture.timeout(timeout);
-        }
-
-        release() {
-          _releaseLock(lockType, callId);
-          Zone.current[#finished]["finished"] = true;
-        }
-
-        return lockFuture
-          .then((_) => new Future.sync(callback))
-          .then((_) {
-            release();
-          }, onError: (e) {
-            if (e is TimeoutException) {
-              _cancelLock(lockType, callId);
-              throw new LockRequestorException("Timed out while waiting for lock '$lockType'");
-            } else {
-              release();
-            }
-          });
+        return _getLock(lockType, callId, timeout, author)
+          .then((_) =>
+              new Future.sync(callback).whenComplete(() => _releaseLock(lockType, callId)))
+          .whenComplete(deactivateZone);
       }, zoneValues: {
         #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
         #meta: metaData,
-        #finished: {"finished" : false}
-      });
+        #active: new _Bool(true)
+      }, zoneSpecification: zoneSpec);
     }
   }
 
