@@ -11,9 +11,9 @@ class Locker {
 
   ServerSocket serverSocket;
   List<Socket> clientSockets = [];
-  // lockName: [{socket: Socket, requestId: String}]
+  // lockName: [{socket : socket, requestId: requestId, author: author}]
   Map<String, List<Map> > requestors = {};
-  // lockName: {socket: Socket, requestId: String}
+  // lockName: {socket : socket, requestId: requestId, author: author}
   Map<String, Map> currentLock = {};
 
   Locker.config(this.serverSocket);
@@ -57,7 +57,24 @@ class Locker {
   }
 
   handleInfoRequest(Socket socket) {
-    writeJSON(socket, {"requestors": requestors, "currentLock": currentLock});
+    removeSocket(map) {
+      return new Map.from(map)..remove("socket");
+    }
+
+    var requestorsWithoutSockets = {};
+    requestors.forEach((lock, reqList) {
+      requestorsWithoutSockets[lock] = reqList.map(removeSocket).toList();
+    });
+
+    var ownersWithoutSockets = {};
+    currentLock.forEach((lock, owner) {
+      ownersWithoutSockets[lock] = removeSocket(owner);
+    });
+
+    writeJSON(socket, {
+      "requestors": requestorsWithoutSockets,
+      "currentLock": ownersWithoutSockets
+    });
   }
 
   handleLockRequest(Map req, Socket socket) {

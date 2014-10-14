@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:clean_lock/locker.dart';
 import 'package:clean_logging/logger.dart';
 import 'package:args/args.dart';
@@ -18,14 +17,9 @@ Logger _logger = new Logger('clean_lock.locker');
 main(List<String> args) {
   ArgParser parser = new ArgParser();
   parser.addFlag('debug', abbr: 'd', defaultsTo: false);
-  parser.addOption('host', abbr: 'h');
-  parser.addOption('port', abbr: 'p');
+  parser.addOption('host', abbr: 'h', defaultsTo: '127.0.0.1');
+  parser.addOption('port', abbr: 'p', defaultsTo: '27002');
   ArgResults res = parser.parse(args);
-
-  if (res['host'] == null || res['port'] == null) {
-    print("You have to specify url and port");
-    return new Future.value(null);
-  }
 
   var host = res['host'];
   var port = num.parse(res['port']);

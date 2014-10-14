@@ -19,6 +19,7 @@ class LockRequestor {
   Map <String, Completer> requestors = {};
   Socket _lockerSocket;
   num _lockIdCounter = 0;
+  int _callIdCounter = 0;
   String prefix = (new Random(new DateTime.now().millisecondsSinceEpoch % (1<<20))).nextDouble().toString();
 
   String url;
@@ -52,7 +53,8 @@ class LockRequestor {
       } else {
         throw new Exception("Unknown response from _lockerSocket");
       }
-    }, onError: (e) => throw new LockRequestorException(e.toString()));
+    }, onError: (e) => throw new LockRequestorException(e.toString())
+    , onDone: () => throw new LockRequestorException("ServerSocket is done (probably crashed) this shouldn't happen"));
   }
 
   static Future<LockRequestor> connect(url, port) =>
@@ -61,18 +63,18 @@ class LockRequestor {
                 "unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
-  Future<String> _getLock(String lockType, String author) {
-    Completer completer = _sendRequest(lockType, "get", author);
+  Future<String> _getLock(String lockType, String callId, String author) {
+    Completer completer = _sendRequest(lockType, "get", callId: callId, author: author);
     return completer.future;
   }
 
-  Future _releaseLock(String lockType, String author) {
-    Completer completer = _sendRequest(lockType, "release", author);
+  Future _releaseLock(String lockType, String callId) {
+    Completer completer = _sendRequest(lockType, "release");
     return completer.future;
   }
 
-  Future _cancelLock(String lockType, String author) {
-    Completer completer = _sendRequest(lockType, "cancel", author);
+  Future _cancelLock(String lockType, String callId) {
+    Completer completer = _sendRequest(lockType, "cancel");
     return completer.future;
   }
 
@@ -90,14 +92,15 @@ class LockRequestor {
     } else {
       // It's not running in any Zone yet or lock is not acquired
       return runZoned(() {
-        Future lockFuture = _getLock(lockType, author);
+        var callId = "${_callIdCounter++}";
+        Future lockFuture = _getLock(lockType, callId, author);
 
         if (timeout != null) {
           lockFuture = lockFuture.timeout(timeout);
         }
 
         release() {
-          _releaseLock(lockType, author);
+          _releaseLock(lockType, callId);
           Zone.current[#finished]["finished"] = true;
         }
 
@@ -107,7 +110,7 @@ class LockRequestor {
             release();
           }, onError: (e) {
             if (e is TimeoutException) {
-              _cancelLock(lockType, author);
+              _cancelLock(lockType, callId);
               throw new LockRequestorException("Timed out while waiting for lock '$lockType'");
             } else {
               release();
@@ -121,12 +124,20 @@ class LockRequestor {
     }
   }
 
-  _sendRequest(String lockType, String action, String author) {
+  _sendRequest(String lockType, String action, {String callId, String author: null}) {
     var requestId = "$prefix--$_lockIdCounter";
     _lockIdCounter++;
     Completer completer = new Completer();
     requestors[requestId] = completer;
-    writeJSON(_lockerSocket, {"type": "lock", "data" : {"lockType": lockType, "action" : action, "requestId" : requestId}});
+    var json = {"type": "lock",
+                "data" : {"lockType": lockType,
+                          "action" : action,
+                          "requestId" : requestId,
+                          "callId": callId,
+                          "author": author
+                         }
+               };
+    writeJSON(_lockerSocket, json);
     return completer;
   }
 
