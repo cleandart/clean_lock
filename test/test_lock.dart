@@ -27,7 +27,7 @@ run() {
       Future lateFuture = new Future.delayed(new Duration(milliseconds: 300),
           () => print("this should not be called"));
 
-      return new Future.value(null);
+      return new Future.delayed(new Duration(milliseconds: 100), () => null);
     }
 
     bool caughtError = false;
@@ -36,10 +36,9 @@ run() {
       lockRequestor.withLock(randomLock(), callback);
     }, onError: (e, s) {
       caughtError = true;
-      print("caught $e\n$s");
     });
 
-    return new Future.delayed(new Duration(milliseconds: 800), () => expect(caughtError, isTrue));
+    return new Future.delayed(new Duration(milliseconds: 500), () => expect(caughtError, isTrue));
   });
 
   test("should handle nested locking", () {
@@ -85,7 +84,7 @@ run() {
   test("withLock should not timeout when lock is available", () {
     var acquiredLock = false;
 
-    var lock = lockRequestor.withLock("lock", () => acquiredLock = true, timeout: new Duration(milliseconds: 500));
+    var lock = lockRequestor.withLock(randomLock(), () => acquiredLock = true, timeout: new Duration(milliseconds: 500));
 
     new Future.delayed(new Duration(milliseconds: 100))
       .then((_) {
@@ -96,11 +95,10 @@ run() {
   });
 
   test("withLock should timeout when lock is not available", () {
-    var lock1 = lockRequestor.withLock("lock", () => new Future.delayed(new Duration(seconds: 2)), author: '1');
+    var lockType = randomLock();
 
-    var acquiredLock = false;
-
-    var lock2 = lockRequestor.withLock("lock", () => acquiredLock = true, timeout: new Duration(milliseconds: 500));
+    var lock1 = lockRequestor.withLock(lockType, () => new Future.delayed(new Duration(seconds: 2)), author: '1');
+    var lock2 = lockRequestor.withLock(lockType, () => null, timeout: new Duration(milliseconds: 500));
 
     expect(lock2 , throwsA(new isInstanceOf<LockRequestorException>()));
 

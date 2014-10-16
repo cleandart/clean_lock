@@ -76,8 +76,7 @@ class LockRequestor {
       future = future.timeout(timeout)
         .catchError((_) =>
             _cancelLock(lockType, callId)
-            .then((_) =>
-                throw new LockRequestorException("Timed out while waiting for lock '$lockType'")),
+              .then((_) => throw new LockRequestorException("Timed out while waiting for lock '$lockType'")),
           test: (e) => e is TimeoutException);
     }
 
@@ -110,34 +109,33 @@ class LockRequestor {
 
     var zoneSpec = new ZoneSpecification(
       run: (self, parent, zone, f) {
-        runIfActive(self, () => parent.run(zone, f));
-//        parent.run(zone, f);
+        return runIfActive(self, () => parent.run(zone, f));
       },
       runUnary: (self, parent, zone, f, arg) {
-        runIfActive(self, () => parent.runUnary(zone, f, arg));
-//        parent.runUnary(zone, f, arg);
+        return runIfActive(self, () => parent.runUnary(zone, f, arg));
       },
       runBinary: (self, parent, zone, f, arg1, arg2) {
-        runIfActive(self, () => parent.runBinary(zone, f, arg1, arg2));
-//        parent.runBinary(zone, f, arg1, arg2);
+        return runIfActive(self, () => parent.runBinary(zone, f, arg1, arg2));
       }
     );
 
     if ((Zone.current[#locks] != null) && Zone.current[#locks].contains(lockType)) {
       return new Future.sync(callback);
     } else {
-      // It's not running in any Zone yet or lock is not acquired
-      return runZoned(() {
-        var callId = "${_callIdCounter++}";
-        return _getLock(lockType, callId, timeout, author)
-          .then((_) =>
-              new Future.sync(callback).whenComplete(() => _releaseLock(lockType, callId)))
-          .whenComplete(deactivateZone);
-      }, zoneValues: {
-        #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
-        #meta: metaData,
-        #active: new _Bool(true)
-      }, zoneSpecification: zoneSpec);
+      var callId = "${_callIdCounter++}";
+      Future lock = _getLock(lockType, callId, timeout, author);
+
+      Future result =
+          runZoned(() {
+            return lock.then((_) => new Future.sync(callback))
+              .whenComplete(deactivateZone);
+          }, zoneValues: {
+            #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
+            #meta: metaData,
+            #active: new _Bool(true)
+          }, zoneSpecification: zoneSpec);
+
+      return result.then((_) => _releaseLock(lockType, callId));
     }
   }
 
