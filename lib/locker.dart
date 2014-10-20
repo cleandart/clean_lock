@@ -84,11 +84,9 @@ class Locker {
     var author = req["author"];
     if (req["action"] == "get") {
       return _addRequestor(rid, cid, author, lt, socket);
-    }
-    else if (req["action"] == "cancel") {
+    } else if (req["action"] == "cancel") {
       return _cancelRequestor(rid, cid, lt, socket);
-    }
-    else {
+    } else {
       return _releaseLock(rid, cid, lt, socket);
     }
   }
