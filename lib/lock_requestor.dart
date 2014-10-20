@@ -19,6 +19,14 @@ class _Bool {
   _Bool([bool this.value = false]);
 }
 
+class _Lock {
+  String lockType;
+  String callId;
+
+  _Lock(this.lockType, this.callId);
+
+}
+
 class LockRequestor {
 
   Map <String, Completer> requestors = {};
@@ -68,28 +76,29 @@ class LockRequestor {
                 "unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
-  Future<String> _getLock(String lockType, String callId, Duration timeout, String author) {
-    Completer completer = _sendRequest(lockType, "get", callId: callId, author: author);
-    Future future = completer.future;
+  Future<_Lock> _getLock(String lockType, Duration timeout, String author) {
+    _Lock lock = new _Lock(lockType, "${_callIdCounter++}");
+    Completer completer = _sendRequest(lock, "get", author: author);
 
     if (timeout != null) {
-      future = future.timeout(timeout)
-        .catchError((_) =>
-            _cancelLock(lockType, callId)
-              .then((_) => throw new LockRequestorException("Timed out while waiting for lock '$lockType'")),
-          test: (e) => e is TimeoutException);
+      return completer.future.timeout(timeout,
+          onTimeout: () => _cancelLock(lock)
+              .then((_) => throw new LockRequestorException("Timed out while waiting for lock '$lockType'")))
+          .then((_) => lock);
+
+    } else {
+      return completer.future.then((_) => lock);
     }
 
-    return future;
   }
 
-  Future _releaseLock(String lockType, String callId) {
-    Completer completer = _sendRequest(lockType, "release", callId: callId);
+  Future _releaseLock(_Lock lock) {
+    Completer completer = _sendRequest(lock, "release");
     return completer.future;
   }
 
-  Future _cancelLock(String lockType, String callId) {
-    Completer completer = _sendRequest(lockType, "cancel", callId: callId);
+  Future _cancelLock(_Lock lock) {
+    Completer completer = _sendRequest(lock, "cancel");
     return completer.future;
   }
 
@@ -122,33 +131,31 @@ class LockRequestor {
     if ((Zone.current[#locks] != null) && Zone.current[#locks].contains(lockType)) {
       return new Future.sync(callback);
     } else {
-      var callId = "${_callIdCounter++}";
-      Future lock = _getLock(lockType, callId, timeout, author);
-
-      Future result =
-          runZoned(() {
-            return lock.then((_) => new Future.sync(callback))
+      return _getLock(lockType, timeout, author)
+        .then((lock) {
+          return runZoned(() {
+            return new Future.sync(callback)
               .whenComplete(deactivateZone);
           }, zoneValues: {
             #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
             #meta: metaData,
             #active: new _Bool(true)
-          }, zoneSpecification: zoneSpec);
-
-      return result.then((_) => _releaseLock(lockType, callId));
+          }, zoneSpecification: zoneSpec)
+          .then((_) => _releaseLock(lock));
+      });
     }
   }
 
-  _sendRequest(String lockType, String action, {String callId, String author: null}) {
+  _sendRequest(_Lock lock, String action, {String author: null}) {
     var requestId = "$prefix--$_lockIdCounter";
     _lockIdCounter++;
     Completer completer = new Completer();
     requestors[requestId] = completer;
     var json = {"type": "lock",
-                "data" : {"lockType": lockType,
+                "data" : {"lockType": lock.lockType,
                           "action" : action,
                           "requestId" : requestId,
-                          "callId": callId,
+                          "callId": lock.callId,
                           "author": author
                          }
                };

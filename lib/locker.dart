@@ -121,16 +121,9 @@ class Locker {
 
   _tryCancelRequestor(String requestId, String callId, String lockType, Socket socket) {
     if (requestors[lockType] != null) {
-      var count = 0;
-      requestors[lockType].removeWhere((requestor) {
-        if (requestor["socket"] == socket && requestor["callId"] == callId) {
-          count++;
-          return true;
-        } else {
-          return false;
-        }
-      });
-      return count > 0;
+      var length = requestors[lockType].length;
+      requestors[lockType].removeWhere((requestor) => requestor["socket"] == socket && requestor["callId"] == callId);
+      return length != requestors[lockType].length;
     }
     return false;
   }
