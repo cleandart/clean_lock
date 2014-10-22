@@ -34,5 +34,7 @@ void main() {
       acquireLock(lockRequestor, "4", minutes(5));
       acquireLock(lockRequestor, "4", minutes(5));
       acquireLock(lockRequestor, "4", minutes(5));
+
+      acquireLock(lockRequestor, "5", minutes(5));
     });
 }
