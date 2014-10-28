@@ -25,12 +25,9 @@ main(List<String> args) {
 String getRequestorInfo(Map requestor) {
   var author = requestor["author"];
   var requestId = requestor["requestId"];
+  var duration = requestor['duration'];
 
-  if (author != null) {
-    return "@$author, #$requestId";
-  } else {
-    return "#$requestId";
-  }
+  return "${author == null ? "" : "@$author, "}#$requestId, duration: $duration";
 }
 
 void prettyPrint(Map<String, Map> response, bool showEmpty) {
@@ -38,7 +35,7 @@ void prettyPrint(Map<String, Map> response, bool showEmpty) {
   var lockOwners = response["currentLock"];
 
   requestors.forEach((lock, requestors) {
-    if (requestors.isNotEmpty || showEmpty) {
+    if (requestors.isNotEmpty || showEmpty || (lockOwners[lock] != null)) {
       var lockOwner = lockOwners[lock];
       var ownerId = lockOwner != null ? lockOwner["requestId"] : null;
 
