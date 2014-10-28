@@ -152,6 +152,7 @@ class Locker {
     requestors.forEach((lockType, socketList) {
       if (socketList.isNotEmpty && (!currentLock.containsKey(lockType))) {
         currentLock[lockType] = requestors[lockType].removeAt(0);
+        currentLock[lockType]['timestamp'] = new DateTime.now();
         _logger.fine('Lock type $lockType acquired');
         writeJSON(currentLock[lockType]["socket"], {"result":"ok", "action":"get", "requestId": currentLock[lockType]["requestId"]});
       }
