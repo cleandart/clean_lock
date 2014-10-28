@@ -105,4 +105,17 @@ run() {
     return lock1;
   });
 
+  test("nested withLock should be able to timeout", () {
+    var lockType1 = randomLock();
+    var lockType2 = randomLock();
+
+    var lock1 = lockRequestor.withLock(lockType2, () => new Future.delayed(new Duration(seconds: 1)));
+    var lock2 = lockRequestor.withLock(lockType1, () => lockRequestor.withLock(lockType2, (){}, timeout: new Duration(milliseconds: 500)));
+
+    expect(lock2, throwsA(new isInstanceOf<LockRequestorException>()));
+
+    return lock1;
+
+  });
+
 }

@@ -11,9 +11,9 @@ class Locker {
 
   ServerSocket serverSocket;
   List<Socket> clientSockets = [];
-  // lockName: [{socket : socket, requestId: requestId, author: author}]
+  // lockName: [{socket : socket, requestId: requestId, author: author, timestamp: DateTime}]
   Map<String, List<Map> > requestors = {};
-  // lockName: {socket : socket, requestId: requestId, author: author}
+  // lockName: {socket : socket, requestId: requestId, author: author, timestamp: DateTime}
   Map<String, Map> currentLock = {};
 
   Locker.config(this.serverSocket);
@@ -57,18 +57,21 @@ class Locker {
   }
 
   handleInfoRequest(Socket socket) {
-    removeSocket(map) {
-      return new Map.from(map)..remove("socket");
-    }
+    getProperInfo(Map map) =>
+      {
+        "requestId" : map["requestId"],
+        "author" : map["author"],
+        "duration" : new DateTime.now().difference(map['timestamp']).toString(),
+      };
 
     var requestorsWithoutSockets = {};
     requestors.forEach((lock, reqList) {
-      requestorsWithoutSockets[lock] = reqList.map(removeSocket).toList();
+      requestorsWithoutSockets[lock] = reqList.map(getProperInfo).toList();
     });
 
     var ownersWithoutSockets = {};
     currentLock.forEach((lock, owner) {
-      ownersWithoutSockets[lock] = removeSocket(owner);
+      ownersWithoutSockets[lock] = getProperInfo(owner);
     });
 
     writeJSON(socket, {
@@ -82,8 +85,9 @@ class Locker {
     var cid = req["callId"];
     var lt = req["lockType"];
     var author = req["author"];
+    var timestamp = new DateTime.now();
     if (req["action"] == "get") {
-      return _addRequestor(rid, cid, author, lt, socket);
+      return _addRequestor(rid, cid, author, timestamp, lt, socket);
     } else if (req["action"] == "cancel") {
       return _cancelRequestor(rid, cid, lt, socket);
     } else {
@@ -92,9 +96,15 @@ class Locker {
   }
 
   // Adds the socket with additional data to queue for given lockType
-  _addRequestor(String requestId, String callId, String author, String lockType, Socket socket) {
+  _addRequestor(String requestId, String callId, String author, DateTime timestamp, String lockType, Socket socket) {
     if (requestors[lockType] == null) requestors[lockType] = [];
-    requestors[lockType].add({"socket" : socket, "requestId": requestId, "callId": callId, "author": author});
+    requestors[lockType].add({
+      "socket" : socket,
+      "requestId": requestId,
+      "callId": callId,
+      "author": author,
+      "timestamp": timestamp
+    });
     checkLockRequestors();
   }
 
