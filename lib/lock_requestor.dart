@@ -14,11 +14,25 @@ class LockRequestorException implements Exception {
   String toString() => "LockRequestor exception: $message";
 }
 
+class _Bool {
+  bool value;
+  _Bool([bool this.value = false]);
+}
+
+class _Lock {
+  String lockType;
+  String callId;
+
+  _Lock(this.lockType, this.callId);
+
+}
+
 class LockRequestor {
 
   Map <String, Completer> requestors = {};
   Socket _lockerSocket;
   num _lockIdCounter = 0;
+  int _callIdCounter = 0;
   String prefix = (new Random(new DateTime.now().millisecondsSinceEpoch % (1<<20))).nextDouble().toString();
 
   String url;
@@ -62,52 +76,87 @@ class LockRequestor {
                 "unable to connect to url: $url, port: $port, (is Locker running?)"));
 
   // Obtains lock and returns unique ID for the holder
-  Future<String> _getLock(String lockType, String author) {
-    Completer completer = _sendRequest(lockType, "get", author: author);
+  Future<_Lock> _getLock(String lockType, Duration timeout, String author) {
+    _Lock lock = new _Lock(lockType, "${_callIdCounter++}");
+    Completer completer = _sendRequest(lock, "get", author: author);
+
+    if (timeout != null) {
+      return completer.future.timeout(timeout,
+          onTimeout: () => _cancelLock(lock)
+              .then((_) => throw new LockRequestorException("Timed out while waiting for lock '$lockType'")))
+          .then((_) => lock);
+
+    } else {
+      return completer.future.then((_) => lock);
+    }
+
+  }
+
+  Future _releaseLock(_Lock lock) {
+    Completer completer = _sendRequest(lock, "release");
     return completer.future;
   }
 
-  Future _releaseLock(String lockType) {
-    Completer completer = _sendRequest(lockType, "release");
+  Future _cancelLock(_Lock lock) {
+    Completer completer = _sendRequest(lock, "cancel");
     return completer.future;
   }
 
   getZoneMetaData() => Zone.current[#meta];
 
-  Future withLock(String lockType, callback(), {dynamic metaData: null,
-    String author: null}) {
-       // Check if the zone it was running in was already finished
-       if ((Zone.current[#finished] != null) && (Zone.current[#finished]['finished'])) {
-         throw new Exception("Zone finished but withLock was called (maybe some future not waited for?)");
-       }
-       // Check if the lock is already acquired
-       if ((Zone.current[#locks] != null) && Zone.current[#locks].contains(lockType)) {
-         return new Future.sync(callback);
-       } else {
-         // It's not running in any Zone yet or lock is not acquired
-         return runZoned(() {
-           return _getLock(lockType, author)
-            .then((_) => new Future.sync(callback))
-            .whenComplete(() => _releaseLock(lockType))
-            .then((_) => Zone.current[#finished]['finished'] = true);
-         }, zoneValues: {
-           #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
-           #meta: metaData,
-           #finished: {"finished" : false}
-         });
-       }
-     }
+  Future withLock(String lockType, callback(), {Duration timeout: null,
+    dynamic metaData: null, String author: null}) {
+    runIfActive(Zone zone, f()) {
+      if (zone[#active].value) {
+        return f();
+      } else {
+        throw new Exception("Zone has already finished (maybe a future was not waited for?)");
+      }
+    }
 
-  _sendRequest(String lockType, String action, {String author: null}) {
+    deactivateZone() => Zone.current[#active].value = false;
+
+    var zoneSpec = new ZoneSpecification(
+      run: (self, parent, zone, f) {
+        return runIfActive(self, () => parent.run(zone, f));
+      },
+      runUnary: (self, parent, zone, f, arg) {
+        return runIfActive(self, () => parent.runUnary(zone, f, arg));
+      },
+      runBinary: (self, parent, zone, f, arg1, arg2) {
+        return runIfActive(self, () => parent.runBinary(zone, f, arg1, arg2));
+      }
+    );
+
+    if ((Zone.current[#locks] != null) && Zone.current[#locks].contains(lockType)) {
+      return new Future.sync(callback);
+    } else {
+      return _getLock(lockType, timeout, author)
+        .then((lock) {
+          return runZoned(() {
+            return new Future.sync(callback)
+              .whenComplete(deactivateZone);
+          }, zoneValues: {
+            #locks: Zone.current[#locks] == null ? new Set.from([lockType]) : (new Set.from(Zone.current[#locks]))..add(lockType),
+            #meta: metaData,
+            #active: new _Bool(true)
+          }, zoneSpecification: zoneSpec)
+          .then((_) => _releaseLock(lock));
+      });
+    }
+  }
+
+  _sendRequest(_Lock lock, String action, {String author: null}) {
     var requestId = "$prefix--$_lockIdCounter";
     _lockIdCounter++;
     Completer completer = new Completer();
     requestors[requestId] = completer;
     var json = {"type": "lock",
-                "data" : {"lockType": lockType,
+                "data" : {"lockType": lock.lockType,
                           "action" : action,
                           "requestId" : requestId,
-                          "author": author,
+                          "callId": lock.callId,
+                          "author": author
                          }
                };
     writeJSON(_lockerSocket, json);
