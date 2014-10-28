@@ -31,13 +31,20 @@ String getRequestorInfo(Map requestor) {
 }
 
 void prettyPrint(Map<String, Map> response, bool showEmpty) {
-  var requestors = response["requestors"];
-  var lockOwners = response["currentLock"];
+  Map requestors = response["requestors"];
+  Map lockOwners = response["currentLock"];
 
-  requestors.forEach((lock, requestors) {
-    if (requestors.isNotEmpty || showEmpty || (lockOwners[lock] != null)) {
-      var lockOwner = lockOwners[lock];
-      var ownerId = lockOwner != null ? lockOwner["requestId"] : null;
+  Set locks = new Set.from(requestors.keys)..addAll(lockOwners.keys);
+
+  locks.forEach((lock) {
+    var lockOwner = lockOwners[lock];
+    var ownerId = lockOwner != null ? lockOwner["requestId"] : null;
+
+    List reqList = requestors[lock];
+
+    if (lockOwner != null ||
+        reqList != null && reqList.isNotEmpty ||
+        showEmpty) {
 
       print("$lock:");
 
@@ -45,9 +52,11 @@ void prettyPrint(Map<String, Map> response, bool showEmpty) {
         print("* " + getRequestorInfo(lockOwner));
       }
 
-      requestors.forEach((requestor) {
-        print("  " + getRequestorInfo(requestor));
-      });
+      if (reqList != null) {
+        reqList.forEach((requestor) {
+          print("  " + getRequestorInfo(requestor));
+        });
+      }
 
       print("");
     }
