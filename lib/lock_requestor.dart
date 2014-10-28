@@ -14,6 +14,16 @@ class LockRequestorException implements Exception {
   String toString() => "LockRequestor exception: $message";
 }
 
+class LockTimeoutException extends LockRequestorException {
+
+  final String message;
+
+  const LockTimeoutException([String this.message = ""]);
+
+  String toString() => "Timeout exception: $message";
+
+}
+
 class _Bool {
   bool value;
   _Bool([bool this.value = false]);
@@ -83,7 +93,7 @@ class LockRequestor {
     if (timeout != null) {
       return completer.future.timeout(timeout,
           onTimeout: () => _cancelLock(lock)
-              .then((_) => throw new LockRequestorException("Timed out while waiting for lock '$lockType'")))
+              .then((_) => throw new LockTimeoutException("Timed out while waiting for lock '$lockType'")))
           .then((_) => lock);
 
     } else {

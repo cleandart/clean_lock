@@ -100,7 +100,7 @@ run() {
     var lock1 = lockRequestor.withLock(lockType, () => new Future.delayed(new Duration(seconds: 2)), author: '1');
     var lock2 = lockRequestor.withLock(lockType, () => null, timeout: new Duration(milliseconds: 500));
 
-    expect(lock2 , throwsA(new isInstanceOf<LockRequestorException>()));
+    expect(lock2 , throwsA(new isInstanceOf<LockTimeoutException>()));
 
     return lock1;
   });
@@ -112,7 +112,7 @@ run() {
     var lock1 = lockRequestor.withLock(lockType2, () => new Future.delayed(new Duration(seconds: 1)));
     var lock2 = lockRequestor.withLock(lockType1, () => lockRequestor.withLock(lockType2, (){}, timeout: new Duration(milliseconds: 500)));
 
-    expect(lock2, throwsA(new isInstanceOf<LockRequestorException>()));
+    expect(lock2, throwsA(new isInstanceOf<LockTimeoutException>()));
 
     return lock1;
 
