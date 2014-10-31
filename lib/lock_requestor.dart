@@ -151,7 +151,8 @@ class LockRequestor {
             #meta: metaData,
             #active: new _Bool(true)
           }, zoneSpecification: zoneSpec)
-          .then((_) => _releaseLock(lock));
+          .whenComplete(() => _releaseLock(lock));
+          // TODO Should create tests for releasing locks after an exception
       });
     }
   }
