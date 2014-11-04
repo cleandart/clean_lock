@@ -2,6 +2,7 @@ library clean_lock.locker;
 
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
 import 'package:useful/socket_jsonizer.dart';
 import 'package:clean_logging/logger.dart';
 
@@ -96,7 +97,8 @@ class Locker {
   }
 
   // Adds the socket with additional data to queue for given lockType
-  _addRequestor(String requestId, String callId, String author, DateTime timestamp, String lockType, Socket socket) {
+  _addRequestor(String requestId, String callId, String author,
+      DateTime timestamp, String lockType, Socket socket) {
     if (requestors[lockType] == null) requestors[lockType] = [];
     requestors[lockType].add({
       "socket" : socket,
@@ -108,10 +110,16 @@ class Locker {
     checkLockRequestors();
   }
 
-  _tryReleaseLock(String requestId, String callId, String lockType, Socket socket) {
-    if (currentLock[lockType]["socket"] == socket && currentLock[lockType]["callId"] == callId) {
+  /** Caution! This is not efficient; should be used rarely. */
+  _prepareForSending(data) =>
+      JSON.decode(JSON.encode(data, toEncodable: (d) => d.toString()));
+
+  bool _tryReleaseLock(String requestId, String callId, String lockType,
+                       Socket socket) {
+    if (currentLock[lockType]["socket"] == socket &&
+        currentLock[lockType]["callId"] == callId) {
       currentLock.remove(lockType);
-      _logger.fine('Lock type $lockType released');
+      _logger.fine('Lock type $lockType released.');
       return true;
     } else {
       return false;
@@ -120,28 +128,59 @@ class Locker {
 
   _releaseLock(String requestId, String callId, String lockType, Socket socket) {
     if (_tryReleaseLock(requestId, callId, lockType, socket)) {
-      writeJSON(socket, {"result":"ok", "action":"release", "requestId":requestId});
+      writeJSON(socket,
+          {"result": "ok", "action": "release", "requestId": requestId});
       checkLockRequestors();
     } else {
-      writeJSON(socket, {"error": "Cannot release lock when the socket does not own it", "action":"release", "requestId":requestId});
+      var message = "Cannot release lock when the socket does not own it.";
+      var data = {
+        "error": message,
+        "action": "release",
+        "requestId": requestId,
+        "callId": callId,
+        "lockType": lockType,
+        "socket": socket,
+        "currentLock": currentLock,
+        "requestors": requestors
+      };
+      _logger.shout(message, data: data);
+      writeJSON(socket, _prepareForSending(data));
     }
   }
 
-  _tryCancelRequestor(String requestId, String callId, String lockType, Socket socket) {
+  bool _tryCancelRequestor(String requestId, String callId, String lockType,
+                           Socket socket) {
     if (requestors[lockType] != null) {
       var length = requestors[lockType].length;
-      requestors[lockType].removeWhere((requestor) => requestor["socket"] == socket && requestor["callId"] == callId);
+      requestors[lockType].removeWhere(
+          (requestor) => requestor["socket"] == socket &&
+                         requestor["callId"] == callId);
       return length != requestors[lockType].length;
     }
     return false;
   }
 
-  _cancelRequestor(String requestId, String callId, String lockType, Socket socket) {
+  _cancelRequestor(String requestId, String callId, String lockType,
+                   Socket socket) {
     if (_tryReleaseLock(requestId, callId, lockType, socket) ||
         _tryCancelRequestor(requestId, callId, lockType, socket)) {
-      writeJSON(socket, {"result": "ok", "action": "cancel", "requestId": requestId});
+      writeJSON(socket,
+          {"result": "ok", "action": "cancel", "requestId": requestId});
     } else {
-      writeJSON(socket, {"error": "Cannot cancel requestor when the socket does not own it nor waits for it", "action": "cancel", "requestId": requestId});
+      var message = "Cannot cancel requestor. "
+                    "The socket does not own it nor waits for it.";
+      var data = {
+        "error": message,
+        "action": "cancel",
+        "requestId": requestId,
+        "callId": callId,
+        "lockType": lockType,
+        "socket": socket,
+        "currentLock": currentLock,
+        "requestors": requestors
+      };
+      _logger.shout(message, data: data);
+      writeJSON(socket, _prepareForSending(data));
     }
   }
 
@@ -154,7 +193,8 @@ class Locker {
         currentLock[lockType] = requestors[lockType].removeAt(0);
         currentLock[lockType]['timestamp'] = new DateTime.now();
         _logger.fine('Lock type $lockType acquired');
-        writeJSON(currentLock[lockType]["socket"], {"result":"ok", "action":"get", "requestId": currentLock[lockType]["requestId"]});
+        writeJSON(currentLock[lockType]["socket"],
+            {"result": "ok", "action": "get", "requestId": currentLock[lockType]["requestId"]});
       }
     });
 

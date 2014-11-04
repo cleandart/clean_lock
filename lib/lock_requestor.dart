@@ -4,6 +4,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:useful/socket_jsonizer.dart';
+import 'package:clean_logging/logger.dart';
+
+Logger logger = new Logger("clean_lock.lock_requestor");
 
 class LockRequestorException implements Exception {
 
@@ -70,6 +73,7 @@ class LockRequestor {
     ss = toJsonStream(_lockerSocket).listen((Map resp) {
       Completer completer = requestors.remove(resp["requestId"]);
       if (resp.containsKey("error")) {
+        logger.warning("The response contains error.", data: {"response": resp});
         completer.completeError(resp["error"]);
       } else if (resp.containsKey("result")) {
         completer.complete();
