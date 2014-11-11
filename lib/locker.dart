@@ -7,17 +7,26 @@ import 'package:clean_logging/logger.dart';
 
 Logger _logger = new Logger('clean_lock.locker');
 
+/**
+ * Locker server. Responsible for assigning locks to given requestors. Responsible
+ * for that for every type of lock there is at most one requestor holding it at a time.
+ * Listens to requests and informs the requestors when it assigns the lock to them.
+ * It also responds to an info request, listing all the requestors and lock holders.
+ */
 class Locker {
 
   ServerSocket serverSocket;
   List<Socket> clientSockets = [];
-  // lockName: [{socket : socket, requestId: requestId, author: author, timestamp: DateTime}]
+  // lockName: [{socket : Socket, requestId: String, callId: String, author: String, timestamp: DateTime}]
   Map<String, List<Map> > requestors = {};
-  // lockName: {socket : socket, requestId: requestId, author: author, timestamp: DateTime}
+  // lockName: {socket : Socket, requestId: String, callId: String, author: String, timestamp: DateTime}
   Map<String, Map> currentLock = {};
 
   Locker.config(this.serverSocket);
 
+  /**
+   * Start the [Locker] server on given [url] and [port].
+   */
   static Future<Locker> bind(url, port) =>
       ServerSocket.bind(url, port)
         .then((ServerSocket sSocket) {
@@ -27,7 +36,8 @@ class Locker {
           return locker;
         });
 
-  // Removes given socket from requestors and releases its locks
+  /// Removes given [socket] from requestors and releases its locks
+  /// (used when the [socket] suddenly disconnects)
   _disposeOfSocket(Socket socket) {
     socket.close();
     requestors.forEach((lock, reqList) {
@@ -38,6 +48,7 @@ class Locker {
     checkLockRequestors();
   }
 
+  /// Releases all locks the [socket] holds
   _removeSocketLocks(Socket socket) {
     List toRemove = [];
     currentLock.forEach((lock, sct) {
@@ -48,6 +59,7 @@ class Locker {
     toRemove.forEach(currentLock.remove);
   }
 
+  /// New [socket] connects - take notion of it and set up listeners to requests
   handleClient(Socket socket) {
     clientSockets.add(socket);
     toJsonStream(socket).listen((Map data) {
@@ -56,6 +68,8 @@ class Locker {
     }, onDone: () => _disposeOfSocket(socket));
   }
 
+  /// [socket] requested for info, it returns a Map with all the requestors and
+  /// all locks with their holders.
   handleInfoRequest(Socket socket) {
     getProperInfo(Map map) =>
       {
@@ -80,6 +94,7 @@ class Locker {
     });
   }
 
+  /// [socket]'s request is concerning a lock - it may be: get, release or cancel.
   handleLockRequest(Map req, Socket socket) {
     var rid = req["requestId"];
     var cid = req["callId"];
@@ -95,7 +110,7 @@ class Locker {
     }
   }
 
-  // Adds the socket with additional data to queue for given lockType
+  /// Adds the socket with additional data to queue for given lockType
   _addRequestor(String requestId, String callId, String author, DateTime timestamp, String lockType, Socket socket) {
     if (requestors[lockType] == null) requestors[lockType] = [];
     requestors[lockType].add({
@@ -108,6 +123,7 @@ class Locker {
     checkLockRequestors();
   }
 
+  /// Tries to release [lockType] by [socket] - releases it only if the [socket] does really own it
   _tryReleaseLock(String requestId, String callId, String lockType, Socket socket) {
     if (currentLock[lockType]["socket"] == socket && currentLock[lockType]["callId"] == callId) {
       currentLock.remove(lockType);
@@ -118,6 +134,7 @@ class Locker {
     }
   }
 
+  /// Releases [lockType] iff the [socket] owns it. Lock is uniquely identified by [callId] & [socket]
   _releaseLock(String requestId, String callId, String lockType, Socket socket) {
     if (_tryReleaseLock(requestId, callId, lockType, socket)) {
       writeJSON(socket, {"result":"ok", "action":"release", "requestId":requestId});
@@ -127,6 +144,7 @@ class Locker {
     }
   }
 
+  /// Removes the requestor from queue.
   _tryCancelRequestor(String requestId, String callId, String lockType, Socket socket) {
     if (requestors[lockType] != null) {
       var length = requestors[lockType].length;
@@ -136,6 +154,8 @@ class Locker {
     return false;
   }
 
+  /// Cancels all lock requests of given requestor ([socket] & [callId]). If it was not in the queue
+  /// nor holding locks, this request should've probably never been sent and it's an error.
   _cancelRequestor(String requestId, String callId, String lockType, Socket socket) {
     if (_tryReleaseLock(requestId, callId, lockType, socket) ||
         _tryCancelRequestor(requestId, callId, lockType, socket)) {
@@ -145,7 +165,7 @@ class Locker {
     }
   }
 
-  // Checks if someone can be given their requested lockType
+  /// Checks if someone can be given their requested lockType
   checkLockRequestors() {
     _logger.finest('Current locks held: $currentLock');
     _logger.finest('Current requestors: $requestors');
@@ -160,6 +180,7 @@ class Locker {
 
   }
 
+  /// Disposes of created resources
   Future close() =>
      Future.wait([
        Future.wait(clientSockets.map((s) => s.close())),
