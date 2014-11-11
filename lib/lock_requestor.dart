@@ -81,11 +81,12 @@ class LockRequestor {
   }
 
   static Future<LockRequestor> connect(url, port) =>
-    Socket.connect(url, port).then((Socket socket) => new LockRequestor.fromSocket(socket))
-      .catchError((e,s) => throw new LockRequestorException("LockRequestor was "
-                "unable to connect to url: $url, port: $port, (is Locker running?)"));
+    runZoned(() =>
+        Socket.connect(url, port).then((Socket socket) => new LockRequestor.fromSocket(socket))
+          .catchError((e,s) => throw new LockRequestorException("LockRequestor was "
+                "unable to connect to url: $url, port: $port, (is Locker running?)")),
+    onError: (e) => e is SocketException ? throw new LockRequestorException(e.toString()) : throw e);
 
-  // Obtains lock and returns unique ID for the holder
   Future<_Lock> _getLock(String lockType, Duration timeout, String author) {
     _Lock lock = new _Lock(lockType, "${_callIdCounter++}");
     Completer completer = _sendRequest(lock, "get", author: author);
