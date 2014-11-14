@@ -46,8 +46,7 @@ Of course, the Locker has to be running before any requests by LockRequestor are
 ### Check, who has locks
 Cannot acquire a lock for a very long time and you are not sure where's the problem?
 Run *dart tool/get_info.dart -h [host url] -p [port]* and it will list down all the lock holders and requestors for you!
-Host and port defaults to 127.0.0.1 and 27002 if not specified. It does not show types of locks,
-which were acquired somewhere in the past, but are not now requested. To show them, use flag *-e*.
+Host and port defaults to 127.0.0.1 and 27002 if not specified. By default, it does not show types of locks, which were acquired and released somewhere in the past. To show them, use flag *-e*.
 For easier reading, you may add *author* to *withLock* call, which will be here displayed with prepending @.
 The line prepending with \* currently has the lock. The duration signalizes, how long is the request in its status (requesting for lock / holding it).
 Request id is prepended with #.

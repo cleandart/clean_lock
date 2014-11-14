@@ -6,7 +6,7 @@ import 'dart:math';
 import 'package:useful/socket_jsonizer.dart';
 
 /**
- * All Exceptions thrown somewhere in LockRequestor's methods are of this type.
+ * All Exceptions thrown somewhere in LockRequestor's methods are of this type or extend it.
  */
 class LockRequestorException implements Exception {
 
