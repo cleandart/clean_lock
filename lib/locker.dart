@@ -21,7 +21,7 @@ class Locker {
   static Future<Locker> bind(url, port) =>
       ServerSocket.bind(url, port)
         .then((ServerSocket sSocket) {
-          _logger.info('Locker running on $url, $port');
+          _logger.fine('Locker running on $url, $port');
           Locker locker = new Locker.config(sSocket);
           locker.serverSocket.listen(locker.handleClient);
           return locker;
@@ -29,6 +29,7 @@ class Locker {
 
   // Removes given socket from requestors and releases its locks
   _disposeOfSocket(Socket socket) {
+    _logger.fine("disposeOfSocket ${socket.hashCode}");
     socket.close();
     requestors.forEach((lock, reqList) {
       reqList.removeWhere((e) => e["socket"] == socket);
