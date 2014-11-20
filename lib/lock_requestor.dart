@@ -5,6 +5,9 @@ import 'dart:io';
 import 'dart:math';
 import 'package:useful/socket_jsonizer.dart';
 
+/**
+ * All Exceptions thrown somewhere in LockRequestor's methods are of this type or extend it.
+ */
 class LockRequestorException implements Exception {
 
   final String message;
@@ -14,6 +17,9 @@ class LockRequestorException implements Exception {
   String toString() => "LockRequestor exception: $message";
 }
 
+/**
+ * Exception thrown when timeout is reached while getting lock
+ */
 class LockTimeoutException extends LockRequestorException {
 
   final String message;
@@ -37,6 +43,11 @@ class _Lock {
 
 }
 
+/**
+ * This class is for requesting various locks from a running Locker. When a specific
+ * lock is acquired, no other instance can acquire a lock of the same type until it is
+ * released.
+ */
 class LockRequestor {
 
   Map <String, Completer> requestors = {};
@@ -58,8 +69,9 @@ class LockRequestor {
 
   LockRequestor(this.url, this.port);
 
-  // Zone needed for catching broken pipe exceptions (e.g. server restarted) happening somewhere in future
+  /// Initialization - connecting to specified url & port, initializing listeners
   Future init() =>
+      // Zone needed for catching broken pipe exceptions (e.g. server restarted) happening somewhere in future
       runZoned(() =>
         Socket.connect(url, port)
           .then((Socket socket) => _lockerSocket = socket)
@@ -80,12 +92,18 @@ class LockRequestor {
     , onDone: () => throw new LockRequestorException("ServerSocket is done (probably crashed) this shouldn't happen"));
   }
 
+  /**
+   * Shortcut for construct & init.
+   */
   static Future<LockRequestor> connect(url, port) =>
-    Socket.connect(url, port).then((Socket socket) => new LockRequestor.fromSocket(socket))
-      .catchError((e,s) => throw new LockRequestorException("LockRequestor was "
-                "unable to connect to url: $url, port: $port, (is Locker running?)"));
+    runZoned(() =>
+        Socket.connect(url, port).then((Socket socket) => new LockRequestor.fromSocket(socket))
+          .catchError((e,s) => throw new LockRequestorException("LockRequestor was "
+                "unable to connect to url: $url, port: $port, (is Locker running?)")),
+    onError: (e) => e is SocketException ? throw new LockRequestorException(e.toString()) : throw e);
 
-  // Obtains lock and returns unique ID for the holder
+  /// Obtains and returns a unique lock of given type for the holder. Completes after the
+  /// lock is aquired
   Future<_Lock> _getLock(String lockType, Duration timeout, String author) {
     _Lock lock = new _Lock(lockType, "${_callIdCounter++}");
     Completer completer = _sendRequest(lock, "get", author: author);
@@ -112,8 +130,27 @@ class LockRequestor {
     return completer.future;
   }
 
+  /**
+   * Used to access meta data passed to [withLock]. It returns the most inner available
+   * meta data passed to nested [withLock]s. For example, this can be useful if the same instance
+   * of some object should be accessed in nested calls of [withLock].
+   */
   getZoneMetaData() => Zone.current[#meta];
 
+  /**
+   * Runs the [callback] after getting a lock of type [lockType]. Ensures, that [callback]
+   * is not ran before the lock is acquired. It runs in Zones. Nested calls of [withLock] remember all locks
+   * the zone acquired (and has not yet released) in the meantime, so if the [callback] is to be run with some lock that some
+   * outer [withLock] has already acquired, the lock is ignored and the [callback] is ran. Ensures the release of lock
+   * after the [callback] is finished.
+   * [timeout] - if specified, [withLock] will wait for lock for only a given time.
+   * When the [timeout] is reached, the future will complete with [LockTimeoutException]
+   * and the lock will never be acquired in this call.
+   * [metaData] - data accessible anywhere in [callback] by calling [getZoneMetaData]
+   * (if used in nested [withLock], it returns the first available data traversing from the
+   * most inner to the most outer call)
+   * [author] - signature (not necessarily unique), used in Locker server
+   */
   Future withLock(String lockType, callback(), {Duration timeout: null,
     dynamic metaData: null, String author: null}) {
     runIfActive(Zone zone, f()) {
@@ -157,6 +194,7 @@ class LockRequestor {
     }
   }
 
+  /// Sends a request for [lock] to the Locker server. Returns a completer, for this request.
   _sendRequest(_Lock lock, String action, {String author: null}) {
     var requestId = "$prefix--$_lockIdCounter";
     _lockIdCounter++;
@@ -174,6 +212,9 @@ class LockRequestor {
     return completer;
   }
 
+  /**
+   * Disposes of the created resources
+   */
   Future close() => _lockerSocket.close().then((_) => ss.cancel()).then((_) => _lockerSocket.destroy());
 
 }
