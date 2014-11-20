@@ -12,10 +12,6 @@ Imagine you have many dart programs sharing one resource, and you only want one 
 Well, now you only start the Locker server and wrap the part, which accesses the resource, into one method 
 with the same lock for all the programs and you're done !
 
-Another example - you may have a non-transactional database (e.g. mongo) and wish to make all operations transactional.
-You can just use the same lock for every operation on database, which ensures there's only 
-one operation at a time using the database and therefore it is transactional.  
-
 ## How to use this ?
 
 ### At first, there comes a quick installation for Linux systems with upstart
