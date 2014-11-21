@@ -21,7 +21,7 @@ class Locker {
   static Future<Locker> bind(url, port) =>
       ServerSocket.bind(url, port)
         .then((ServerSocket sSocket) {
-          _logger.fine('Locker running on $url, $port');
+          _logger.info('Locker running on $url, $port');
           Locker locker = new Locker.config(sSocket);
           locker.serverSocket.listen(locker.handleClient);
           return locker;
@@ -59,6 +59,9 @@ class Locker {
     }, onDone: () => _disposeOfSocket(socket)
      , onError: (e,s) => _logger.warning("Error on listening on stream ${s.hashCode}"));
   }
+
+  _flushAndCatchError(socket) =>
+      socket.flush().catchError((e, s) => _logger.warning("error when flushing in socket ${s.hashCode} $e $s"));
 
   handleInfoRequest(Socket socket) {
     getProperInfo(Map map) =>
@@ -126,12 +129,11 @@ class Locker {
   _releaseLock(String requestId, String callId, String lockType, Socket socket) {
     if (_tryReleaseLock(requestId, callId, lockType, socket)) {
       writeJSON(socket, {"result":"ok", "action":"release", "requestId":requestId});
-      socket.flush().catchError((e, s) => _logger.warning("error when flushing in socket ${s.hashCode} $e $s"));
       checkLockRequestors();
     } else {
       writeJSON(socket, {"error": "Cannot release lock when the socket does not own it", "action":"release", "requestId":requestId});
-      socket.flush().catchError((e, s) => _logger.warning("error when flushing in socket ${s.hashCode} $e $s"));
     }
+    _flushAndCatchError(socket);
   }
 
   _tryCancelRequestor(String requestId, String callId, String lockType, Socket socket) {
@@ -147,11 +149,10 @@ class Locker {
     if (_tryReleaseLock(requestId, callId, lockType, socket) ||
         _tryCancelRequestor(requestId, callId, lockType, socket)) {
       writeJSON(socket, {"result": "ok", "action": "cancel", "requestId": requestId});
-      socket.flush().catchError((e, s) => _logger.warning("error when flushing in socket ${s.hashCode} $e $s"));
     } else {
       writeJSON(socket, {"error": "Cannot cancel requestor when the socket does not own it nor waits for it", "action": "cancel", "requestId": requestId});
-      socket.flush().catchError((e, s) => _logger.warning("error when flushing in socket ${s.hashCode} $e $s"));
     }
+    _flushAndCatchError(socket);
   }
 
   // Checks if someone can be given their requested lockType
@@ -164,7 +165,7 @@ class Locker {
         currentLock[lockType]['timestamp'] = new DateTime.now();
         _logger.fine('Lock type $lockType acquired');
         writeJSON(currentLock[lockType]["socket"], {"result":"ok", "action":"get", "requestId": currentLock[lockType]["requestId"]});
-        currentLock[lockType]["socket"].flush().catchError((e, s) => _logger.warning("error when flushing in socket ${s.hashCode} $e $s"));
+        _flushAndCatchError(currentLock[lockType]["socket"]);
       }
     });
 
