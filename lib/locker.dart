@@ -39,6 +39,7 @@ class Locker {
   /// Removes given [socket] from requestors and releases its locks
   /// (used when the [socket] suddenly disconnects)
   _disposeOfSocket(Socket socket) {
+    _logger.fine("disposeOfSocket ${socket.hashCode}");
     socket.close();
     requestors.forEach((lock, reqList) {
       reqList.removeWhere((e) => e["socket"] == socket);
@@ -61,12 +62,19 @@ class Locker {
 
   /// New [socket] connects - take notion of it and set up listeners to requests
   handleClient(Socket socket) {
+    _logger.info("New socket come: ${socket.hashCode}");
+    socket.done.catchError((e,s) => _logger.info("Soccet ${socket.hashCode} done error $e $s "));
     clientSockets.add(socket);
     toJsonStream(socket).listen((Map data) {
       if (data["type"] == "lock") handleLockRequest(data["data"], socket);
       if (data["type"] == "info") handleInfoRequest(socket);
-    }, onDone: () => _disposeOfSocket(socket));
+    }, onDone: () => _disposeOfSocket(socket)
+     , onError: (e,s) => _logger.warning("Error on listening on stream ${s.hashCode}"));
   }
+
+  _flushAndCatchError(socket) =>
+      socket.flush().catchError((e, s) => _logger.warning("error when flushing in socket ${s.hashCode} $e $s"));
+
 
   /// [socket] requested for info, it returns a Map with all the requestors and
   /// all locks with their holders.
@@ -115,6 +123,7 @@ class Locker {
     if (requestors[lockType] == null) requestors[lockType] = [];
     requestors[lockType].add({
       "socket" : socket,
+      "socketHashCode" : socket.hashCode,
       "requestId": requestId,
       "callId": callId,
       "author": author,
@@ -142,6 +151,7 @@ class Locker {
     } else {
       writeJSON(socket, {"error": "Cannot release lock when the socket does not own it", "action":"release", "requestId":requestId});
     }
+    _flushAndCatchError(socket);
   }
 
   /// Removes the requestor from queue.
@@ -163,6 +173,7 @@ class Locker {
     } else {
       writeJSON(socket, {"error": "Cannot cancel requestor when the socket does not own it nor waits for it", "action": "cancel", "requestId": requestId});
     }
+    _flushAndCatchError(socket);
   }
 
   /// Checks if someone can be given their requested lockType
@@ -175,6 +186,7 @@ class Locker {
         currentLock[lockType]['timestamp'] = new DateTime.now();
         _logger.fine('Lock type $lockType acquired');
         writeJSON(currentLock[lockType]["socket"], {"result":"ok", "action":"get", "requestId": currentLock[lockType]["requestId"]});
+        _flushAndCatchError(currentLock[lockType]["socket"]);
       }
     });
 
