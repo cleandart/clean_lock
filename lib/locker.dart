@@ -80,18 +80,21 @@ class Locker {
     } else {
       var result = "";
       try {
-        result =  "Socket(Address:${s.address} ${s.port} Remote:${s.remoteAddress} ${s.remotePort} HashCode: ${s.hashCode})";
+        result = "Socket(Address:${s.address} ${s.port} "
+                 "Remote:${s.remoteAddress} ${s.remotePort} "
+                 "HashCode: ${s.hashCode})";
       } catch (e, s) { result = "Socket(Error getting info ${s.hashCode})";}
       return result;
     }
   }
 
 
-  _writeJsonWithErrors(Socket socket, dynamic object) =>
-    new Future.sync(() => writeJSON(socket, object))
+  _writeJsonWithErrors(Socket socket, dynamic object, {toEncodable}) =>
+    new Future.sync(() => writeJSON(socket, object, toEncodable: toEncodable))
     //not shure why its crashing when i flush it
     //.then((_) => socket.flush())
-    .catchError((e, s) => _logger.warning("error when writeJSON in socket ${_getInfoAboutSocket(socket)} $e $s"));
+    .catchError((e, s) => _logger.warning("error when writeJSON in socket "
+        "${_getInfoAboutSocket(socket)} $e $s"));
 
 
   /// [socket] requested for info, it returns a Map with all the requestors and
@@ -165,7 +168,8 @@ class Locker {
     }
   }
 
-  /// Releases [lockType] iff the [socket] owns it. Lock is uniquely identified by [callId] & [socket]
+  /// Releases [lockType] iff the [socket] owns it.
+  /// Lock is uniquely identified by [callId] & [socket].
   _releaseLock(String requestId, String callId, String lockType, Socket socket) {
     if (_tryReleaseLock(requestId, callId, lockType, socket)) {
       _writeJsonWithErrors(socket,
@@ -173,17 +177,15 @@ class Locker {
       checkLockRequestors();
     } else {
       var message = "Cannot release lock when the socket does not own it.";
-      var data = {
-        "error": message,
-        "action": "release",
-        "requestId": requestId,
-        "callId": callId,
-        "lockType": lockType,
-        "socket": socket,
-        "currentLock": currentLock,
-        "requestors": requestors
-      };
-      _logger.shout(message, data: data);
+      var data = {"error": message,
+                  "action": "release",
+                  "requestId": requestId,
+                  "callId": callId,
+                  "lockType": lockType,};
+      var serverData = {"socketInfo" : _getInfoAboutSocket(socket),
+                        "currentLock": currentLock,
+                        "requestors": requestors};
+      _logger.shout(message, data: data..addAll(serverData));
       _writeJsonWithErrors(socket, data, toEncodable: (d) => d.toString());
     }
   }
@@ -213,17 +215,15 @@ class Locker {
     } else {
       var message = "Cannot cancel requestor. "
                     "The socket does not own it nor waits for it.";
-      var data = {
-        "error": message,
-        "action": "cancel",
-        "requestId": requestId,
-        "callId": callId,
-        "lockType": lockType,
-        "socket": socket,
-        "currentLock": currentLock,
-        "requestors": requestors
-      };
-      _logger.shout(message, data: data);
+      var data = {"error": message,
+                  "action": "cancel",
+                  "requestId": requestId,
+                  "callId": callId,
+                  "lockType": lockType,};
+      var serverData = {"socketInfo" : _getInfoAboutSocket(socket),
+                        "currentLock": currentLock,
+                        "requestors": requestors};
+      _logger.shout(message, data: data..addAll(serverData));
       _writeJsonWithErrors(socket, data, toEncodable: (d) => d.toString());
     }
   }
