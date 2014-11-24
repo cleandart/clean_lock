@@ -2,7 +2,6 @@ library clean_lock.locker;
 
 import 'dart:io';
 import 'dart:async';
-import 'dart:convert';
 import 'package:useful/socket_jsonizer.dart';
 import 'package:clean_logging/logger.dart';
 
@@ -110,10 +109,6 @@ class Locker {
     checkLockRequestors();
   }
 
-  /** Caution! This is not efficient; should be used rarely. */
-  _prepareForSending(data) =>
-      JSON.decode(JSON.encode(data, toEncodable: (d) => d.toString()));
-
   bool _tryReleaseLock(String requestId, String callId, String lockType,
                        Socket socket) {
     if (currentLock[lockType]["socket"] == socket &&
@@ -144,7 +139,7 @@ class Locker {
         "requestors": requestors
       };
       _logger.shout(message, data: data);
-      writeJSON(socket, _prepareForSending(data));
+      writeJSON(socket, data, toEncodable: (d) => d.toString());
     }
   }
 
@@ -180,7 +175,7 @@ class Locker {
         "requestors": requestors
       };
       _logger.shout(message, data: data);
-      writeJSON(socket, _prepareForSending(data));
+      writeJSON(socket, data, toEncodable: (d) => d.toString());
     }
   }
 

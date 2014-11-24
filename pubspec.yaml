@@ -5,5 +5,5 @@ description: Locking server
 homepage: https://github.com/cleandart/clean_lock
 dependencies:
   unittest: any
-  useful: '>=1.0.18 <2.0.0'
+  useful: '>=1.0.19 <2.0.0'
   clean_logging: '>=0.4.1'
