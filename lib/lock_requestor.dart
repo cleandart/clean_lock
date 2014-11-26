@@ -143,10 +143,12 @@ class LockRequestor {
 
   /**
    * Runs the [callback] after getting a lock of type [lockType]. Ensures, that [callback]
-   * is not ran before the lock is acquired. It runs in Zones. Nested calls of [withLock] remember all locks
+   * is not run before the lock is acquired. It runs in Zones. Nested calls of [withLock] remember all locks
    * the zone acquired (and has not yet released) in the meantime, so if the [callback] is to be run with some lock that some
-   * outer [withLock] has already acquired, the lock is ignored and the [callback] is ran. Ensures the release of lock
-   * after the [callback] is finished.
+   * outer [withLock] has already acquired, the lock is ignored and the [callback] is run.
+   * [safe] - Ensures the release of lock after the [callback] is finished
+   * ([Exception] is thrown if the callback has not finished before the lock is
+   * returned).
    * [timeout] - if specified, [withLock] will wait for lock for only a given time.
    * When the [timeout] is reached, the future will complete with [LockTimeoutException]
    * and the lock will never be acquired in this call.
@@ -156,13 +158,13 @@ class LockRequestor {
    * [author] - signature (not necessarily unique), used in Locker server
    */
   Future withLock(String lockType, callback(), {Duration timeout: null,
-    dynamic metaData: null, String author: null}) {
+    dynamic metaData: null, bool safe: true, String author: null}) {
     runIfActive(Zone zone, f()) {
-      if (zone[#active].value) {
-        return f();
-      } else {
-        throw new Exception("Zone has already finished (maybe a future was not waited for?)");
+      if (safe && !zone[#active].value) {
+        throw new Exception("Zone has already finished "
+                            "(maybe a future was not waited for?)");
       }
+      return f();
     }
 
     deactivateZone() => Zone.current[#active].value = false;

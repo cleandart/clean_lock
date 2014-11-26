@@ -22,23 +22,45 @@ run() {
     return lockRequestor.close();
   });
 
-  test("withLock should throw an exception if callback is not waiting for futures", () {
-    callback() {
-      Future lateFuture = new Future.delayed(new Duration(milliseconds: 300),
-          () => print("this should not be called"));
+  group("withLock behavior for when callback is not waiting for futures", () {
+    bool caughtError, callbackFinished;
 
-      return new Future.delayed(new Duration(milliseconds: 100), () => null);
+    run(safe) {
+      caughtError = false;
+      callbackFinished = false;
+
+      runZoned(() {
+        lockRequestor.withLock(randomLock(), () {
+          // a future that is not waited for
+          new Future.delayed(new Duration(milliseconds: 300),
+              () => callbackFinished = true);
+
+          return new Future.delayed(new Duration(milliseconds: 100), () => null);
+        }, safe: safe);
+      }, onError: (e, s) {
+        caughtError = true;
+      });
     }
 
-    bool caughtError = false;
+    runChecks(check()) {
+      return new Future.delayed(new Duration(milliseconds: 500), check);
+    }
 
-    runZoned(() {
-      lockRequestor.withLock(randomLock(), callback);
-    }, onError: (e, s) {
-      caughtError = true;
+    test("should throw when safe=true", () {
+      run(true);
+      return runChecks(() {
+        expect(callbackFinished, isFalse);
+        expect(caughtError, isTrue);
+      });
     });
 
-    return new Future.delayed(new Duration(milliseconds: 500), () => expect(caughtError, isTrue));
+    test("should not throw when safe=false", () {
+      run(false);
+      return runChecks(() {
+        expect(callbackFinished, isTrue);
+        expect(caughtError, isFalse);
+      });
+    });
   });
 
   test("should handle nested locking", () {
